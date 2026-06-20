@@ -1,171 +1,67 @@
-/**
- * Betting calculations utility
- */
-
-/**
- * Format currency as BRL
- */
-export function formatBRL(value) {
-  const num = Number(value) || 0;
-  const abs = Math.abs(num).toFixed(2);
-  const [intPart, decPart] = abs.split('.');
-  const formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `${num < 0 ? '-' : ''}R$ ${formatted},${decPart}`;
+export function calcROI(totalInvestido, lucroLiquido) {
+  if (!totalInvestido || totalInvestido === 0) return 0;
+  return (lucroLiquido / totalInvestido) * 100;
 }
 
-/**
- * Format date as Brazilian DD/MM/YYYY
- */
-export function formatDate(dateStr) {
-  if (!dateStr) return '';
-  const [year, month, day] = dateStr.split('-');
-  return `${day}/${month}/${year}`;
-}
-
-/**
- * Format datetime as DD/MM/YYYY HH:mm
- */
-export function formatDateTime(isoStr) {
-  if (!isoStr) return '';
-  const d = new Date(isoStr);
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
-}
-
-/**
- * Calculate ROI from apostas array
- * ROI = (total_profit / total_stake) * 100
- */
-export function calcROI(apostas) {
-  const finished = apostas.filter(a => a.resultado !== 'pending');
-  if (finished.length === 0) return 0;
-  const totalStake = finished.reduce((s, a) => s + (a.stake || 0), 0);
-  const totalProfit = finished.reduce((s, a) => s + (a.lucro || 0), 0);
-  if (totalStake === 0) return 0;
-  return +((totalProfit / totalStake) * 100).toFixed(2);
-}
-
-/**
- * Calculate win rate
- * Win rate = wins / (wins + losses) * 100
- */
 export function calcWinRate(apostas) {
-  const finished = apostas.filter(a => a.resultado !== 'pending');
-  if (finished.length === 0) return 0;
-  const wins = finished.filter(a => a.resultado === 'win').length;
-  return +((wins / finished.length) * 100).toFixed(1);
+  const fin = apostas.filter(a => a.resultado !== 'pending');
+  if (fin.length === 0) return 0;
+  return (fin.filter(a => a.resultado === 'win').length / fin.length) * 100;
 }
 
-/**
- * Calculate total profit/loss
- */
-export function calcProfitLoss(apostas, period = 'all') {
-  let filtered = apostas.filter(a => a.resultado !== 'pending');
-
-  if (period === 'today') {
-    const today = new Date().toISOString().split('T')[0];
-    filtered = filtered.filter(a => a.data === today);
-  } else if (period === 'week') {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    filtered = filtered.filter(a => new Date(a.data) >= weekAgo);
-  } else if (period === 'month') {
-    const monthAgo = new Date();
-    monthAgo.setDate(monthAgo.getDate() - 30);
-    filtered = filtered.filter(a => new Date(a.data) >= monthAgo);
+export function calcStats(apostas) {
+  const fin = apostas.filter(a => a.resultado !== 'pending');
+  const wins = fin.filter(a => a.resultado === 'win');
+  const losses = fin.filter(a => a.resultado === 'loss');
+  const totalInvestido = fin.reduce((s, a) => s + (Number(a.valor) || 0), 0);
+  const totalGanho = wins.reduce((s, a) => s + (Number(a.lucro) || 0), 0);
+  const totalPerdido = losses.reduce((s, a) => s + (Number(a.valor) || 0), 0);
+  const lucroLiquido = totalGanho - totalPerdido;
+  const roi = totalInvestido ? (lucroLiquido / totalInvestido) * 100 : 0;
+  const winRate = fin.length ? (wins.length / fin.length) * 100 : 0;
+  const melhor = fin.reduce((b, a) => (!b || Number(a.lucro) > Number(b.lucro) ? a : b), null);
+  const pior = fin.reduce((b, a) => (!b || Number(a.lucro) < Number(b.lucro) ? a : b), null);
+  let streak = 0, streakType = null;
+  for (let i = fin.length - 1; i >= 0; i--) {
+    const r = fin[i].resultado;
+    if (!streakType) { streakType = r; streak = 1; }
+    else if (r === streakType) streak++;
+    else break;
   }
-
-  return +filtered.reduce((s, a) => s + (a.lucro || 0), 0).toFixed(2);
+  return { totalInvestido, totalGanho, totalPerdido, lucroLiquido, roi, winRate, melhor, pior, streak, streakType, total: fin.length, wins: wins.length, losses: losses.length };
 }
 
-/**
- * Find best and worst bets
- */
-export function calcBestBet(apostas) {
-  const finished = apostas.filter(a => a.resultado !== 'pending');
-  if (finished.length === 0) return { best: null, worst: null };
-
-  const best = finished.reduce((prev, cur) => (cur.lucro > prev.lucro ? cur : prev), finished[0]);
-  const worst = finished.reduce((prev, cur) => (cur.lucro < prev.lucro ? cur : prev), finished[0]);
-
-  return { best, worst };
+export function calcStatsByTipo(apostas) {
+  const tipos = [...new Set(apostas.map(a => a.tipo).filter(Boolean))];
+  return tipos.map(tipo => ({ tipo, ...calcStats(apostas.filter(a => a.tipo === tipo)) })).sort((a, b) => b.lucroLiquido - a.lucroLiquido);
 }
 
-/**
- * Calculate cumulative profit projection
- * @param {number} bankroll - starting bankroll
- * @param {number} dailyPct - daily % target
- * @param {number} days - projection days
- * @returns {number[]} daily bankroll values
- */
-export function calcProjection(bankroll, dailyPct, days) {
-  const result = [bankroll];
-  let current = bankroll;
-  for (let i = 0; i < days; i++) {
-    current = current * (1 + dailyPct / 100);
-    result.push(+current.toFixed(2));
+export function buildChartData(apostas, period) {
+  const now = new Date();
+  const sorted = [...apostas].filter(a => a.resultado !== 'pending').sort((a, b) => new Date(a.data) - new Date(b.data));
+  if (period === 'hoje') {
+    return Array.from({ length: 24 }, (_, h) => ({
+      label: `${h}h`,
+      value: sorted.filter(a => { const d = new Date(a.data); return d.toDateString() === now.toDateString() && d.getHours() <= h; }).reduce((s, a) => s + (Number(a.lucro) || 0), 0),
+    }));
   }
-  return result;
-}
-
-/**
- * Calculate arbitrage profit percentage
- * @param {number[]} odds - array of decimal odds
- * @returns {{ possible: boolean, profit: number, stakes: number[] }}
- */
-export function calcArbitrage(odds) {
-  if (!odds || odds.length === 0) return { possible: false, profit: 0, stakes: [] };
-
-  const sum = odds.reduce((s, o) => s + 1 / o, 0);
-  const possible = sum < 1;
-  const profit = possible ? +((1 / sum - 1) * 100).toFixed(2) : 0;
-
-  const totalStake = 1000;
-  const stakes = odds.map(o => +((totalStake / (o * sum))).toFixed(2));
-
-  return { possible, profit, stakes };
-}
-
-/**
- * Build cumulative profit chart data from apostas (last N days)
- */
-export function buildChartData(apostas, days = 7) {
-  const labels = [];
-  const data = [];
-  let cumulative = 0;
-
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    const dayLabel = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-
-    const dayProfit = apostas
-      .filter(a => a.data === dateStr && a.resultado !== 'pending')
-      .reduce((s, a) => s + (a.lucro || 0), 0);
-
-    cumulative += dayProfit;
-    labels.push(dayLabel);
-    data.push(+cumulative.toFixed(2));
+  const days = period === '7dias' ? 7 : period === '30dias' ? 30 : null;
+  if (days !== null) {
+    return Array.from({ length: days }, (_, i) => {
+      const d = new Date(now); d.setDate(d.getDate() - (days - 1 - i));
+      return { label: `${d.getDate()}/${d.getMonth() + 1}`, value: sorted.filter(a => new Date(a.data).toDateString() === d.toDateString()).reduce((s, a) => s + (Number(a.lucro) || 0), 0) };
+    });
   }
-
-  return { labels, data };
+  if (!sorted.length) return [{ label: 'Início', value: 0 }];
+  const first = new Date(sorted[0].data);
+  const weeks = Math.max(1, Math.ceil((now - first) / (7 * 86400000)));
+  return Array.from({ length: Math.min(weeks, 16) }, (_, i) => {
+    const s = new Date(first); s.setDate(s.getDate() + i * 7);
+    const e = new Date(s); e.setDate(e.getDate() + 7);
+    return { label: `S${i + 1}`, value: sorted.filter(a => { const d = new Date(a.data); return d >= s && d < e; }).reduce((s2, a) => s2 + (Number(a.lucro) || 0), 0) };
+  });
 }
 
-/**
- * Get sport emoji
- */
 export function getSportEmoji(esporte) {
-  switch (esporte) {
-    case 'futebol': return '⚽';
-    case 'basquete': return '🏀';
-    case 'tenis': return '🎾';
-    case 'volei': return '🏐';
-    case 'americano': return '🏈';
-    default: return '🏆';
-  }
+  return esporte === 'basquete' ? '🏀' : '⚽';
 }

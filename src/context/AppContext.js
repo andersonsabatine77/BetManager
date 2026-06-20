@@ -1,114 +1,70 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { initDatabase, getBanca, getApostas, updateBanca as dbUpdateBanca, addAposta as dbAddAposta, updateAposta as dbUpdateAposta } from '../services/database';
-import { getSugestoes, mockLiveGames, getArbitragem } from '../services/mockData';
-import { getLiveGames } from '../services/liveService';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { initDatabase, getBanca, getApostas, addAposta as dbAdd, updateAposta as dbUpdate, deleteAposta as dbDelete, updateBanca, clearAllData as dbClear, resetBanca as dbReset } from '../services/database';
+import { getSugestoes } from '../services/mockData';
 
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
   const [loading, setLoading] = useState(true);
-  const [banca, setBanca] = useState({
-    saldo: 5000, saldoInicial: 5000, percentualDiario: 2.5,
-    nivelRisco: 'moderado', stopLossD: 5, stopLossW: 15,
-  });
+  const [banca, setBanca] = useState({ saldoInicial: 1000, saldoAtual: 1000 });
   const [apostas, setApostas] = useState([]);
-  const [sugestoes, setSugestoes] = useState(() => getSugestoes());
-  const [liveGames, setLiveGames] = useState([]);
-  const [liveHasKey, setLiveHasKey] = useState(null);
-  const [liveError, setLiveError] = useState(null);
-  const [arbitragem, setArbitragem] = useState(() => getArbitragem());
-  const refreshTimerRef = useRef(null);
+  const sugestoes = getSugestoes(); // fresh every render — no stale dates
 
-  const loadData = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
       await initDatabase();
-      const bancaData = await getBanca();
-      if (bancaData) setBanca(bancaData);
-      const apostasData = await getApostas();
-      setApostas(apostasData || []);
+      const b = await getBanca();
+      if (b) setBanca(b);
+      const a = await getApostas();
+      setApostas(a || []);
     } catch (e) {
-      console.warn('DB load error:', e);
+      console.warn('load error', e);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const fetchLive = useCallback(async () => {
-    const result = await getLiveGames();
-    setLiveHasKey(result.hasKey);
-    setLiveError(result.error || null);
-    if (result.hasKey && result.games.length > 0) {
-      setLiveGames(result.games);
-    } else if (!result.hasKey) {
-      setLiveGames([]);
-    }
-    // If hasKey but 0 games (no live matches right now), keep existing or empty
-  }, []);
+  useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  useEffect(() => {
-    fetchLive();
-    refreshTimerRef.current = setInterval(fetchLive, 30000);
-    return () => clearInterval(refreshTimerRef.current);
-  }, [fetchLive]);
-
-  const updateBanca = useCallback(async (data) => {
-    const updated = { ...banca, ...data };
-    setBanca(updated);
-    try {
-      await dbUpdateBanca(updated);
-    } catch (e) {
-      console.warn('updateBanca error:', e);
-    }
+  const registrarAposta = useCallback(async (aposta) => {
+    const id = aposta.id || `a_${Date.now()}`;
+    const lucro = aposta.resultado === 'win' ? +(aposta.valor * (aposta.odd - 1)).toFixed(2) : aposta.resultado === 'loss' ? -aposta.valor : 0;
+    const novaAposta = { ...aposta, id, lucro, data: aposta.data || new Date().toISOString() };
+    setApostas(prev => [novaAposta, ...prev]);
+    await dbAdd(novaAposta);
+    const novoSaldo = banca.saldoAtual + lucro;
+    setBanca(b => ({ ...b, saldoAtual: novoSaldo }));
+    await updateBanca(novoSaldo);
+    return novaAposta;
   }, [banca]);
 
-  const addAposta = useCallback(async (aposta) => {
-    const newAposta = {
-      ...aposta,
-      id: aposta.id || `a_${Date.now()}`,
-      data: aposta.data || new Date().toISOString().split('T')[0],
-      resultado: 'pending',
-      lucro: 0,
-    };
-    setApostas(prev => [newAposta, ...prev]);
-    try {
-      await dbAddAposta(newAposta);
-      await updateBanca({ saldo: banca.saldo - aposta.stake });
-    } catch (e) {
-      console.warn('addAposta error:', e);
-    }
-  }, [banca, updateBanca]);
+  const atualizarResultado = useCallback(async (id, resultado, odd, valor) => {
+    const lucro = resultado === 'win' ? +(valor * (odd - 1)).toFixed(2) : resultado === 'loss' ? -valor : 0;
+    setApostas(prev => prev.map(a => a.id === id ? { ...a, resultado, lucro } : a));
+    await dbUpdate(id, resultado, lucro);
+    const novoSaldo = banca.saldoAtual + lucro;
+    setBanca(b => ({ ...b, saldoAtual: novoSaldo }));
+    await updateBanca(novoSaldo);
+  }, [banca]);
 
-  const updateAposta = useCallback(async (id, data) => {
-    setApostas(prev => prev.map(a => a.id === id ? { ...a, ...data } : a));
-    try {
-      await dbUpdateAposta(id, data);
-      if (data.resultado === 'win') {
-        const aposta = apostas.find(a => a.id === id);
-        if (aposta) await updateBanca({ saldo: banca.saldo + aposta.stake * aposta.odd });
-      }
-    } catch (e) {
-      console.warn('updateAposta error:', e);
-    }
-  }, [apostas, banca, updateBanca]);
+  const deletarAposta = useCallback(async (id) => {
+    setApostas(prev => prev.filter(a => a.id !== id));
+    await dbDelete(id);
+  }, []);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setSugestoes(getSugestoes());
-    setArbitragem(getArbitragem());
-    await loadData();
-    await fetchLive();
-  }, [loadData, fetchLive]);
+  const limparTudo = useCallback(async () => {
+    await dbClear();
+    setApostas([]);
+    setBanca({ saldoInicial: 1000, saldoAtual: 1000 });
+  }, []);
+
+  const resetarBanca = useCallback(async (novoSaldo) => {
+    await dbReset(novoSaldo);
+    setBanca(b => ({ ...b, saldoAtual: novoSaldo, saldoInicial: novoSaldo }));
+  }, []);
 
   return (
-    <AppContext.Provider value={{
-      loading, banca, apostas, sugestoes, liveGames,
-      liveHasKey, liveError, arbitragem,
-      updateBanca, addAposta, updateAposta, refresh, fetchLive,
-    }}>
+    <AppContext.Provider value={{ loading, banca, apostas, sugestoes, registrarAposta, atualizarResultado, deletarAposta, limparTudo, resetarBanca, reload: load }}>
       {children}
     </AppContext.Provider>
   );
@@ -116,6 +72,6 @@ export function AppProvider({ children }) {
 
 export function useApp() {
   const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useApp must be used within AppProvider');
+  if (!ctx) throw new Error('useApp fora do AppProvider');
   return ctx;
 }

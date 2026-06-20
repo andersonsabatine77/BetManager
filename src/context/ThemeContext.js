@@ -1,70 +1,40 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useContext, useState } from 'react';
 
-const THEME_KEY = '@betmanager_theme';
-
-const lightColors = {
-  background: '#f0f2f5',
-  card: '#ffffff',
-  primary: '#6c63ff',
-  secondary: '#ff6584',
-  text: '#1a1a2e',
-  textSecondary: '#6b7280',
-  border: '#e5e7eb',
+const DARK = {
+  background: '#0f172a',
+  card: '#1e293b',
+  border: '#334155',
+  primary: '#7c3aed',
+  secondary: '#0ea5e9',
   success: '#10b981',
-  warning: '#f59e0b',
   danger: '#ef4444',
-  win: '#10b981',
-  loss: '#ef4444',
-  live: '#ef4444',
+  warning: '#f59e0b',
+  text: '#f1f5f9',
+  textSecondary: '#94a3b8',
+  isDark: true,
 };
 
-const darkColors = {
-  background: '#0f0f1a',
-  card: '#1a1a2e',
-  primary: '#7c73ff',
-  secondary: '#ff7594',
-  text: '#f9fafb',
-  textSecondary: '#9ca3af',
-  border: '#2d2d4e',
-  success: '#34d399',
-  warning: '#fbbf24',
-  danger: '#f87171',
-  win: '#34d399',
-  loss: '#f87171',
-  live: '#f87171',
-};
-
-const ThemeContext = createContext({
+const LIGHT = {
+  background: '#f1f5f9',
+  card: '#ffffff',
+  border: '#e2e8f0',
+  primary: '#7c3aed',
+  secondary: '#0ea5e9',
+  success: '#059669',
+  danger: '#dc2626',
+  warning: '#d97706',
+  text: '#0f172a',
+  textSecondary: '#475569',
   isDark: false,
-  colors: lightColors,
-  toggleTheme: () => {},
-});
+};
+
+const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
-  const [isDark, setIsDark] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem(THEME_KEY)
-      .then((val) => {
-        if (val === 'dark') setIsDark(true);
-      })
-      .finally(() => setLoaded(true));
-  }, []);
-
-  const toggleTheme = async () => {
-    const next = !isDark;
-    setIsDark(next);
-    await AsyncStorage.setItem(THEME_KEY, next ? 'dark' : 'light');
-  };
-
-  const colors = isDark ? darkColors : lightColors;
-
-  if (!loaded) return null;
-
+  const [isDark, setIsDark] = useState(true);
+  const colors = isDark ? DARK : LIGHT;
   return (
-    <ThemeContext.Provider value={{ isDark, colors, toggleTheme }}>
+    <ThemeContext.Provider value={{ colors, isDark, toggle: () => setIsDark(v => !v) }}>
       {children}
     </ThemeContext.Provider>
   );

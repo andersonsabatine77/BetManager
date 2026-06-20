@@ -1,452 +1,184 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch,
-  TextInput, Alert, Platform, Linking,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Switch, TextInput, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useApp } from '../context/AppContext';
-import { clearAllData } from '../services/database';
-import { formatBRL } from '../utils/calculations';
-import { getApiKey, saveApiKey } from '../services/liveService';
-
-const RISK_LEVELS = ['conservador', 'moderado', 'agressivo'];
-const CASAS_LIST = ['Bet365', 'Betfair', 'Pinnacle', '1xBet', 'Betano'];
-
-function Section({ title, children, colors }) {
-  return (
-    <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{title.toUpperCase()}</Text>
-      <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        {children}
-      </View>
-    </View>
-  );
-}
-
-function RowItem({ icon, iconColor, label, right, onPress, last, colors, danger }) {
-  return (
-    <TouchableOpacity
-      style={[styles.row, !last && { borderBottomWidth: 0.5, borderBottomColor: colors.border }]}
-      onPress={onPress}
-      disabled={!onPress}
-    >
-      <View style={[styles.rowIcon, { backgroundColor: (iconColor || colors.primary) + '22' }]}>
-        <Ionicons name={icon} size={16} color={danger ? colors.danger : (iconColor || colors.primary)} />
-      </View>
-      <Text style={[styles.rowLabel, { color: danger ? colors.danger : colors.text }]}>{label}</Text>
-      <View style={styles.rowRight}>{right}</View>
-    </TouchableOpacity>
-  );
-}
+import { formatBRL } from '../utils/formatters';
 
 export default function SettingsScreen() {
-  const { colors, isDark, toggleTheme } = useTheme();
-  const theme = { colors, isDark };
-  const { banca, updateBanca, refresh } = useApp();
+  const { colors, isDark, toggle } = useTheme();
+  const { banca, limparTudo, resetarBanca, reload } = useApp();
+  const [bancaModal, setBancaModal] = useState(false);
+  const [novaBanca, setNovaBanca] = useState('');
 
-  const [saldo, setSaldo] = useState(String(banca.saldoInicial));
-  const [metaDiaria, setMetaDiaria] = useState(String(banca.percentualDiario));
-  const [nivelRisco, setNivelRisco] = useState(banca.nivelRisco);
-  const [stopLossD, setStopLossD] = useState(String(banca.stopLossD));
-  const [stopLossW, setStopLossW] = useState(String(banca.stopLossW));
-  const [notifGeral, setNotifGeral] = useState(true);
-  const [notifArb, setNotifArb] = useState(true);
-  const [notifStopLoss, setNotifStopLoss] = useState(true);
-  const [notifKelly, setNotifKelly] = useState(false);
-  const [casasEnabled, setCasasEnabled] = useState(
-    CASAS_LIST.reduce((acc, c) => ({ ...acc, [c]: true }), {})
-  );
-  const [saved, setSaved] = useState(false);
-  const [apiKey, setApiKey] = useState('');
-  const [apiKeySaved, setApiKeySaved] = useState(false);
-
-  useEffect(() => {
-    getApiKey().then(k => { if (k) setApiKey(k); });
-  }, []);
-
-  useEffect(() => {
-    setSaldo(String(banca.saldoInicial));
-    setMetaDiaria(String(banca.percentualDiario));
-    setNivelRisco(banca.nivelRisco);
-    setStopLossD(String(banca.stopLossD));
-    setStopLossW(String(banca.stopLossW));
-  }, [banca]);
-
-  async function handleSave() {
-    const saldoNum = parseFloat(saldo.replace(',', '.'));
-    const metaNum = parseFloat(metaDiaria.replace(',', '.'));
-    const slDNum = parseFloat(stopLossD.replace(',', '.'));
-    const slWNum = parseFloat(stopLossW.replace(',', '.'));
-
-    if (isNaN(saldoNum) || saldoNum <= 0) return Alert.alert('Erro', 'Saldo inválido.');
-    if (isNaN(metaNum) || metaNum <= 0 || metaNum > 100) return Alert.alert('Erro', 'Meta diária deve ser entre 1% e 100%.');
-
-    await updateBanca({
-      saldoInicial: saldoNum,
-      saldo: saldoNum,
-      percentualDiario: metaNum,
-      nivelRisco,
-      stopLossD: isNaN(slDNum) ? 5 : slDNum,
-      stopLossW: isNaN(slWNum) ? 15 : slWNum,
-    });
-
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  function handleResetBanca() {
+    const val = parseFloat(novaBanca.replace(',', '.'));
+    if (!val || val <= 0) {
+      Alert.alert('Valor inválido', 'Informe um valor positivo para a banca.');
+      return;
+    }
+    Alert.alert('Redefinir Banca', `Definir banca para ${formatBRL(val)}?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Confirmar', onPress: async () => {
+          await resetarBanca(val);
+          setBancaModal(false);
+          setNovaBanca('');
+        }
+      },
+    ]);
   }
 
-  async function handleClearData() {
+  function handleClearAll() {
     Alert.alert(
-      'Apagar todos os dados',
-      'Isso vai apagar todo o histórico de apostas e resetar a banca. Esta ação não pode ser desfeita.',
+      'Limpar Tudo',
+      'Isso removerá TODO o histórico de apostas. A ação não pode ser desfeita.',
       [
         { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Apagar',
-          style: 'destructive',
-          onPress: async () => {
-            await clearAllData();
-            await refresh();
-            Alert.alert('Pronto', 'Dados apagados com sucesso.');
-          },
-        },
+        { text: 'Limpar', style: 'destructive', onPress: () => limparTudo() },
       ]
     );
   }
 
+  function SettingRow({ icon, title, subtitle, right, onPress, danger }) {
+    return (
+      <TouchableOpacity
+        style={[sr.row, { borderBottomColor: colors.border }]}
+        onPress={onPress}
+        disabled={!onPress}
+        activeOpacity={onPress ? 0.7 : 1}
+      >
+        <View style={[sr.iconBox, { backgroundColor: (danger ? colors.danger : colors.primary) + '22' }]}>
+          <Ionicons name={icon} size={20} color={danger ? colors.danger : colors.primary} />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={[sr.title, { color: danger ? colors.danger : colors.text }]}>{title}</Text>
+          {subtitle ? <Text style={[sr.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text> : null}
+        </View>
+        {right}
+        {onPress && !right ? <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} /> : null}
+      </TouchableOpacity>
+    );
+  }
+
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView style={[s.safe, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>Configurações</Text>
+        <View style={s.header}>
+          <Text style={[s.title, { color: colors.text }]}>Configurações</Text>
         </View>
 
-        {/* API de Futebol */}
-        <Section title="API de Futebol (Dados Ao Vivo)" colors={colors}>
-          <View style={[styles.inputRow, { borderBottomColor: 'transparent' }]}>
-            <View style={[styles.rowIcon, { backgroundColor: colors.primary + '22' }]}>
-              <Ionicons name="key" size={16} color={colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: colors.text }]}>football-data.org API Key</Text>
-              <Text style={[styles.apiHint, { color: colors.textSecondary }]}>
-                Grátis em football-data.org — cobre Premier League, Bundesliga, Brasileirão e mais
-              </Text>
-              <TextInput
-                style={[styles.apiInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                value={apiKey}
-                onChangeText={setApiKey}
-                placeholder="Cole sua chave aqui"
-                placeholderTextColor={colors.textSecondary}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TouchableOpacity
-                style={[styles.apiSaveBtn, { backgroundColor: apiKeySaved ? colors.success : colors.primary }]}
-                onPress={async () => {
-                  if (!apiKey.trim()) return Alert.alert('Erro', 'Chave não pode estar vazia.');
-                  await saveApiKey(apiKey);
-                  setApiKeySaved(true);
-                  setTimeout(() => setApiKeySaved(false), 2000);
-                }}
-              >
-                <Ionicons name={apiKeySaved ? 'checkmark' : 'save'} size={14} color="#fff" />
-                <Text style={styles.apiSaveBtnText}>{apiKeySaved ? 'Salvo!' : 'Salvar Chave'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Section>
-
-        {/* Banca */}
-        <Section title="Banca" colors={colors}>
-          <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
-            <View style={[styles.rowIcon, { backgroundColor: colors.success + '22' }]}>
-              <Ionicons name="wallet" size={16} color={colors.success} />
-            </View>
-            <Text style={[styles.rowLabel, { color: colors.text }]}>Banca Inicial</Text>
-            <TextInput
-              style={[styles.input, { color: colors.primary }]}
-              value={saldo}
-              onChangeText={setSaldo}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-
-          <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
-            <View style={[styles.rowIcon, { backgroundColor: colors.warning + '22' }]}>
-              <Ionicons name="trending-up" size={16} color={colors.warning} />
-            </View>
-            <Text style={[styles.rowLabel, { color: colors.text }]}>Meta Diária (%)</Text>
-            <TextInput
-              style={[styles.input, { color: colors.primary }]}
-              value={metaDiaria}
-              onChangeText={setMetaDiaria}
-              keyboardType="decimal-pad"
-              placeholder="2.5"
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-
-          <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
-            <View style={[styles.rowIcon, { backgroundColor: colors.danger + '22' }]}>
-              <Ionicons name="alert-circle" size={16} color={colors.danger} />
-            </View>
-            <Text style={[styles.rowLabel, { color: colors.text }]}>Stop Loss Diário (%)</Text>
-            <TextInput
-              style={[styles.input, { color: colors.primary }]}
-              value={stopLossD}
-              onChangeText={setStopLossD}
-              keyboardType="decimal-pad"
-              placeholder="5"
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-
-          <View style={[styles.inputRow, { borderBottomColor: 'transparent' }]}>
-            <View style={[styles.rowIcon, { backgroundColor: colors.danger + '22' }]}>
-              <Ionicons name="shield" size={16} color={colors.danger} />
-            </View>
-            <Text style={[styles.rowLabel, { color: colors.text }]}>Stop Loss Semanal (%)</Text>
-            <TextInput
-              style={[styles.input, { color: colors.primary }]}
-              value={stopLossW}
-              onChangeText={setStopLossW}
-              keyboardType="decimal-pad"
-              placeholder="15"
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-        </Section>
-
-        {/* Risk level */}
-        <Section title="Nível de Risco" colors={colors}>
-          <View style={styles.riskRow}>
-            {RISK_LEVELS.map(r => (
-              <TouchableOpacity
-                key={r}
-                style={[
-                  styles.riskBtn,
-                  { borderColor: colors.border },
-                  nivelRisco === r && {
-                    backgroundColor: r === 'conservador' ? colors.success :
-                                     r === 'moderado' ? colors.warning : colors.danger,
-                    borderColor: 'transparent',
-                  },
-                ]}
-                onPress={() => setNivelRisco(r)}
-              >
-                <Text style={[
-                  styles.riskText,
-                  { color: nivelRisco === r ? '#fff' : colors.textSecondary },
-                ]}>
-                  {r.charAt(0).toUpperCase() + r.slice(1)}
-                </Text>
-                <Text style={{ fontSize: 16 }}>
-                  {r === 'conservador' ? '🛡️' : r === 'moderado' ? '⚖️' : '🔥'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={[styles.riskDesc, { color: colors.textSecondary }]}>
-            {nivelRisco === 'conservador' && 'Kelly × 0.25 — Gestão conservadora, 25% da fração Kelly.'}
-            {nivelRisco === 'moderado' && 'Kelly × 0.50 — Equilíbrio entre retorno e risco.'}
-            {nivelRisco === 'agressivo' && 'Kelly × 1.00 — Fração Kelly completa. Alto risco/retorno.'}
-          </Text>
-        </Section>
+        {/* Banca info */}
+        <View style={[s.bancaCard, { backgroundColor: colors.primary }]}>
+          <Text style={s.bancaLabel}>Saldo Atual</Text>
+          <Text style={s.bancaValue}>{formatBRL(banca.saldoAtual)}</Text>
+          <Text style={s.bancaInitial}>Banca inicial: {formatBRL(banca.saldoInicial)}</Text>
+        </View>
 
         {/* Aparência */}
-        <Section title="Aparência" colors={colors}>
-          <RowItem
+        <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>APARÊNCIA</Text>
+          <SettingRow
             icon={isDark ? 'moon' : 'sunny'}
-            iconColor={isDark ? colors.primary : colors.warning}
-            label={isDark ? 'Modo Escuro' : 'Modo Claro'}
-            colors={colors}
-            last
-            right={
-              <Switch
-                value={isDark}
-                onValueChange={toggleTheme}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor="#fff"
-              />
-            }
+            title="Tema Escuro"
+            subtitle={isDark ? 'Ativado' : 'Desativado'}
+            right={<Switch value={isDark} onValueChange={toggle} trackColor={{ false: colors.border, true: colors.primary }} thumbColor="#fff" />}
           />
-        </Section>
+        </View>
 
-        {/* Notifications */}
-        <Section title="Notificações" colors={colors}>
-          {[
-            { key: 'notifGeral', label: 'Notificações gerais', icon: 'notifications', val: notifGeral, set: setNotifGeral },
-            { key: 'notifArb', label: 'Oportunidades de arbitragem', icon: 'trending-up', val: notifArb, set: setNotifArb },
-            { key: 'notifStopLoss', label: 'Alertas de Stop Loss', icon: 'alert-circle', val: notifStopLoss, set: setNotifStopLoss },
-            { key: 'notifKelly', label: 'Sugestões Kelly diárias', icon: 'bulb', val: notifKelly, set: setNotifKelly },
-          ].map((n, i, arr) => (
-            <RowItem
-              key={n.key}
-              icon={n.icon}
-              label={n.label}
-              colors={colors}
-              last={i === arr.length - 1}
-              right={
-                <Switch
-                  value={n.val}
-                  onValueChange={n.set}
-                  trackColor={{ false: colors.border, true: colors.primary }}
-                  thumbColor="#fff"
-                />
-              }
-            />
-          ))}
-        </Section>
-
-        {/* Bookmakers */}
-        <Section title="Casas de Apostas" colors={colors}>
-          {CASAS_LIST.map((casa, i) => (
-            <RowItem
-              key={casa}
-              icon="globe"
-              iconColor={colors.secondary}
-              label={casa}
-              colors={colors}
-              last={i === CASAS_LIST.length - 1}
-              right={
-                <Switch
-                  value={casasEnabled[casa]}
-                  onValueChange={(val) => setCasasEnabled(prev => ({ ...prev, [casa]: val }))}
-                  trackColor={{ false: colors.border, true: colors.primary }}
-                  thumbColor="#fff"
-                />
-              }
-            />
-          ))}
-        </Section>
-
-        {/* Data */}
-        <Section title="Dados" colors={colors}>
-          <RowItem
-            icon="cloud-upload"
-            iconColor={colors.primary}
-            label="Fazer Backup"
-            colors={colors}
-            onPress={() => Alert.alert('Backup', 'Funcionalidade em desenvolvimento.')}
-            right={<Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />}
+        {/* Banca */}
+        <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>BANCA</Text>
+          <SettingRow
+            icon="wallet-outline"
+            title="Redefinir Banca"
+            subtitle="Alterar valor da banca inicial"
+            onPress={() => setBancaModal(true)}
           />
-          <RowItem
-            icon="cloud-download"
-            iconColor={colors.success}
-            label="Restaurar Backup"
-            colors={colors}
-            onPress={() => Alert.alert('Restaurar', 'Funcionalidade em desenvolvimento.')}
-            right={<Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />}
+        </View>
+
+        {/* Dados */}
+        <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>DADOS</Text>
+          <SettingRow
+            icon="refresh-outline"
+            title="Sincronizar"
+            subtitle="Recarregar dados do banco"
+            onPress={reload}
           />
-          <RowItem
-            icon="trash"
-            label="Apagar Todos os Dados"
-            colors={colors}
-            last
+          <SettingRow
+            icon="trash-outline"
+            title="Limpar Histórico"
+            subtitle="Remove todas as apostas registradas"
+            onPress={handleClearAll}
             danger
-            onPress={handleClearData}
-            right={<Ionicons name="chevron-forward" size={16} color={colors.danger} />}
           />
-        </Section>
+        </View>
 
-        {/* About */}
-        <Section title="Sobre" colors={colors}>
-          <RowItem
-            icon="information-circle"
-            iconColor={colors.primary}
-            label="Versão"
-            colors={colors}
-            right={<Text style={[styles.versionText, { color: colors.textSecondary }]}>1.0.0</Text>}
-          />
-          <RowItem
-            icon="code-slash"
-            iconColor={colors.secondary}
-            label="Desenvolvido por"
-            colors={colors}
-            last
-            right={<Text style={[styles.versionText, { color: colors.textSecondary }]}>JARVIS AI</Text>}
-          />
-        </Section>
-
-        {/* Save button */}
-        <TouchableOpacity
-          style={[styles.saveBtn, { backgroundColor: saved ? colors.success : colors.primary }]}
-          onPress={handleSave}
-        >
-          <Ionicons name={saved ? 'checkmark' : 'save'} size={18} color="#fff" />
-          <Text style={styles.saveBtnText}>{saved ? 'Salvo!' : 'Salvar Configurações'}</Text>
-        </TouchableOpacity>
+        {/* Sobre */}
+        <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>SOBRE</Text>
+          <SettingRow icon="information-circle-outline" title="BetManager Pro" subtitle="v2.0.0 · Gestão inteligente de apostas" />
+          <SettingRow icon="shield-checkmark-outline" title="Dados locais" subtitle="Todas as informações ficam no seu dispositivo" />
+        </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Modal redefinir banca */}
+      <Modal visible={bancaModal} transparent animationType="slide">
+        <View style={s.modalOverlay}>
+          <View style={[s.modalBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[s.modalTitle, { color: colors.text }]}>Redefinir Banca</Text>
+            <Text style={[s.modalSub, { color: colors.textSecondary }]}>
+              Banca atual: {formatBRL(banca.saldoInicial)}
+            </Text>
+            <TextInput
+              style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+              placeholder="Novo valor (ex: 1000)"
+              placeholderTextColor={colors.textSecondary}
+              keyboardType="numeric"
+              value={novaBanca}
+              onChangeText={setNovaBanca}
+            />
+            <View style={s.modalBtns}>
+              <TouchableOpacity style={[s.modalBtn, { borderColor: colors.border }]} onPress={() => { setBancaModal(false); setNovaBanca(''); }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.modalBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]} onPress={handleResetBanca}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Confirmar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const sr = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1 },
+  iconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 14, fontWeight: '600' },
+  subtitle: { fontSize: 12, marginTop: 2 },
+});
+
+const s = StyleSheet.create({
   safe: { flex: 1 },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
+  header: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   title: { fontSize: 22, fontWeight: '800' },
-  section: { paddingHorizontal: 16, marginTop: 20 },
-  sectionTitle: { fontSize: 11, fontWeight: '700', marginBottom: 8, letterSpacing: 0.5 },
-  sectionCard: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 10 },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    gap: 10,
-    borderBottomWidth: 0.5,
-  },
-  rowIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  rowLabel: { flex: 1, fontSize: 14, fontWeight: '500' },
-  rowRight: { alignItems: 'flex-end' },
-  input: { fontSize: 15, fontWeight: '700', textAlign: 'right', minWidth: 80 },
-  riskRow: { flexDirection: 'row', gap: 8, padding: 12 },
-  riskBtn: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 10,
-    alignItems: 'center',
-    gap: 4,
-  },
-  riskText: { fontSize: 12, fontWeight: '700' },
-  riskDesc: { fontSize: 12, paddingHorizontal: 12, paddingBottom: 12, lineHeight: 18 },
-  versionText: { fontSize: 13 },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 16,
-    marginTop: 24,
-    borderRadius: 16,
-    padding: 16,
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  apiHint: { fontSize: 11, marginBottom: 8, lineHeight: 16 },
-  apiInput: {
-    borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8,
-    fontSize: 13, marginBottom: 8,
-  },
-  apiSaveBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, alignSelf: 'flex-start',
-  },
-  apiSaveBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  bancaCard: { marginHorizontal: 16, borderRadius: 16, padding: 18, marginBottom: 20 },
+  bancaLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 12 },
+  bancaValue: { color: '#fff', fontSize: 30, fontWeight: '800', marginVertical: 4 },
+  bancaInitial: { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
+  section: { marginHorizontal: 16, borderRadius: 16, borderWidth: 1, marginBottom: 16, overflow: 'hidden' },
+  sectionTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalBox: { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, padding: 24 },
+  modalTitle: { fontSize: 18, fontWeight: '800', marginBottom: 4 },
+  modalSub: { fontSize: 13, marginBottom: 16 },
+  input: { borderRadius: 12, borderWidth: 1, padding: 14, fontSize: 16, marginBottom: 16 },
+  modalBtns: { flexDirection: 'row', gap: 12 },
+  modalBtn: { flex: 1, borderRadius: 12, borderWidth: 1, padding: 14, alignItems: 'center' },
 });

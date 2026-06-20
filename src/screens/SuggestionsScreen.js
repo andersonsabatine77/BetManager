@@ -1,369 +1,287 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  TextInput, Modal, KeyboardAvoidingView, Platform,
+  Modal, TextInput, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useApp } from '../context/AppContext';
-import BetCard from '../components/BetCard';
-import { formatBRL } from '../utils/calculations';
-import { calculateBetSize } from '../utils/kelly';
+import { formatBRL, getJogoLabel } from '../utils/formatters';
 
-const SPORTS = ['Todos', 'futebol', 'basquete', 'tenis'];
-const RISKS = ['Todos', 'baixo', 'medio', 'alto'];
+const RISCO_COLOR = { baixo: '#10b981', medio: '#f59e0b', alto: '#ef4444' };
+const SPORTS_FILTER = ['Todos', 'futebol', 'basquete'];
 
-// Bet type groups for UI — each label maps to one or more tipo values
-const TIPO_GROUPS = [
-  { label: 'Todos',      tipos: null },
-  { label: '1',          tipos: ['1'] },
-  { label: 'X',          tipos: ['X'] },
-  { label: '2',          tipos: ['2'] },
-  { label: 'Over 0.5',   tipos: ['Over 0.5'] },
-  { label: 'Over 1.5',   tipos: ['Over 1.5'] },
-  { label: 'Over 2.5',   tipos: ['Over 2.5'] },
-  { label: 'Over 3.5',   tipos: ['Over 3.5'] },
-  { label: 'Under 1.5',  tipos: ['Under 1.5'] },
-  { label: 'Under 2.5',  tipos: ['Under 2.5'] },
-  { label: 'Under 3.5',  tipos: ['Under 3.5'] },
-  { label: 'BTTS Sim',   tipos: ['BTTS Sim'] },
-  { label: 'BTTS Não',   tipos: ['BTTS Não'] },
-  { label: 'Esc +8.5',   tipos: ['Esc +8.5'] },
-  { label: 'Esc +9.5',   tipos: ['Esc +9.5'] },
-  { label: 'Esc +10.5',  tipos: ['Esc +10.5'] },
-  { label: 'Esc -9.5',   tipos: ['Esc -9.5'] },
-  { label: 'Cart +3.5',  tipos: ['Cart +3.5'] },
-  { label: 'Cart +4.5',  tipos: ['Cart +4.5'] },
-  { label: 'AH -0.5',    tipos: ['AH -0.5'] },
-  { label: 'AH +0.5',    tipos: ['AH +0.5'] },
-];
-
-function FilterChip({ label, active, color, onPress }) {
+function ConfidenceBar({ value, colors }) {
+  const color = value >= 75 ? colors.success : value >= 60 ? colors.warning : colors.danger;
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[
-        styles.chip,
-        { borderColor: active ? color : 'rgba(128,128,128,0.35)' },
-        active && { backgroundColor: color },
-      ]}
-    >
-      <Text style={[styles.chipText, { color: active ? '#fff' : '#9ca3af' }]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
+    <View style={{ marginTop: 8 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+        <Text style={{ color: colors.textSecondary, fontSize: 11 }}>Confiança IA</Text>
+        <Text style={{ color, fontSize: 11, fontWeight: '700' }}>{value}%</Text>
+      </View>
+      <View style={{ height: 6, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' }}>
+        <View style={{ width: `${value}%`, height: '100%', backgroundColor: color, borderRadius: 3 }} />
+      </View>
+    </View>
   );
 }
 
 export default function SuggestionsScreen() {
   const { colors } = useTheme();
-  const { sugestoes, addAposta, banca } = useApp();
+  const { sugestoes, registrarAposta, banca } = useApp();
+  const [sportFilter, setSportFilter] = useState('Todos');
+  const [selected, setSelected] = useState(null);
+  const [valor, setValor] = useState('');
+  const [odd, setOdd] = useState('');
+  const [resultado, setResultado] = useState(null); // 'win' | 'loss' | null
+  const [showModal, setShowModal] = useState(false);
+  const [showManual, setShowManual] = useState(false);
+  // Manual fields
+  const [mTime1, setMTime1] = useState('');
+  const [mTime2, setMTime2] = useState('');
+  const [mTipo, setMTipo] = useState('');
+  const [mValor, setMValor] = useState('');
+  const [mOdd, setMOdd] = useState('');
+  const [mResultado, setMResultado] = useState(null);
+  const [mEsporte, setMEsporte] = useState('futebol');
 
-  const [sport, setSport] = useState('Todos');
-  const [risco, setRisco] = useState('Todos');
-  const [tipoLabel, setTipoLabel] = useState('Todos');
-  const [oddMin, setOddMin] = useState('');
-  const [oddMax, setOddMax] = useState('');
-  const [sortBy, setSortBy] = useState('confianca');
+  const filtered = sportFilter === 'Todos' ? sugestoes : sugestoes.filter(s => s.esporte === sportFilter);
 
-  const [selectedBet, setSelectedBet] = useState(null);
-  const [stakeInput, setStakeInput] = useState('');
-  const [modalVisible, setModalVisible] = useState(false);
-
-  const activeTipos = useMemo(() => {
-    const g = TIPO_GROUPS.find(g => g.label === tipoLabel);
-    return g ? g.tipos : null;
-  }, [tipoLabel]);
-
-  const filtered = useMemo(() => {
-    let arr = [...sugestoes];
-    if (sport !== 'Todos') arr = arr.filter(s => s.esporte === sport);
-    if (risco !== 'Todos') arr = arr.filter(s => s.risco === risco);
-    if (activeTipos) arr = arr.filter(s => activeTipos.includes(s.tipo));
-    if (oddMin) arr = arr.filter(s => s.odd >= parseFloat(oddMin));
-    if (oddMax) arr = arr.filter(s => s.odd <= parseFloat(oddMax));
-    arr.sort((a, b) =>
-      sortBy === 'confianca' ? b.confianca - a.confianca : b.odd - a.odd
-    );
-    return arr;
-  }, [sugestoes, sport, risco, activeTipos, oddMin, oddMax, sortBy]);
-
-  function openAddModal(bet) {
-    setSelectedBet(bet);
-    const kelly = calculateBetSize(banca.saldo, bet.odd, bet.confianca, banca.nivelRisco);
-    setStakeInput(kelly.amount.toFixed(2));
-    setModalVisible(true);
+  function openModal(sug) {
+    setSelected(sug);
+    setValor('');
+    setOdd('');
+    setResultado(null);
+    setShowModal(true);
   }
 
-  function handleAdd() {
-    if (!selectedBet) return;
-    const stake = parseFloat(stakeInput.replace(',', '.'));
-    if (isNaN(stake) || stake <= 0) return;
-    addAposta({
-      id: `bet_${Date.now()}`,
-      time1: selectedBet.time1,
-      time2: selectedBet.time2,
-      liga: selectedBet.liga,
-      esporte: selectedBet.esporte,
-      odd: selectedBet.odd,
-      stake,
-      data: new Date().toISOString().split('T')[0],
+  async function confirmAposta() {
+    const v = parseFloat(valor.replace(',', '.'));
+    const o = parseFloat(odd.replace(',', '.'));
+    if (!v || v <= 0) return Alert.alert('Erro', 'Informe o valor apostado.');
+    if (!o || o <= 1) return Alert.alert('Erro', 'Informe uma odd válida (maior que 1).');
+    if (!resultado) return Alert.alert('Erro', 'Selecione o resultado.');
+    if (v > banca.saldoAtual) return Alert.alert('Atenção', 'Valor supera seu saldo atual.');
+    await registrarAposta({
+      time1: selected.time1, time2: selected.time2,
+      tipo: selected.tipo, valor: v, odd: o, resultado,
+      esporte: selected.esporte, origem: 'sugestao',
     });
-    setModalVisible(false);
-    setSelectedBet(null);
+    setShowModal(false);
+    Alert.alert('✅ Registrado!', resultado === 'win' ? `Parabéns! +${formatBRL(v * (o - 1))}` : `Aposta registrada.`);
+  }
+
+  async function confirmManual() {
+    if (!mTime1 || !mTime2) return Alert.alert('Erro', 'Preencha os times.');
+    if (!mTipo) return Alert.alert('Erro', 'Informe o tipo de aposta.');
+    const v = parseFloat(mValor.replace(',', '.'));
+    const o = parseFloat(mOdd.replace(',', '.'));
+    if (!v || v <= 0) return Alert.alert('Erro', 'Informe o valor apostado.');
+    if (!o || o <= 1) return Alert.alert('Erro', 'Informe uma odd válida.');
+    if (!mResultado) return Alert.alert('Erro', 'Selecione o resultado.');
+    await registrarAposta({ time1: mTime1, time2: mTime2, tipo: mTipo, valor: v, odd: o, resultado: mResultado, esporte: mEsporte, origem: 'manual' });
+    setShowManual(false);
+    setMTime1(''); setMTime2(''); setMTipo(''); setMValor(''); setMOdd(''); setMResultado(null);
+    Alert.alert('✅ Registrado!', 'Aposta manual adicionada.');
   }
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Sugestões IA</Text>
-        <Text style={[styles.count, { color: colors.textSecondary }]}>{filtered.length} apostas</Text>
+    <SafeAreaView style={[s.safe, { backgroundColor: colors.background }]} edges={['top']}>
+      <View style={s.header}>
+        <Text style={[s.title, { color: colors.text }]}>Sugestões</Text>
+        <TouchableOpacity style={[s.manualBtn, { backgroundColor: colors.primary }]} onPress={() => setShowManual(true)}>
+          <Ionicons name="add" size={16} color="#fff" />
+          <Text style={s.manualBtnText}>Manual</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Sort row */}
-      <View style={styles.sortRow}>
-        <Text style={[styles.sortLabel, { color: colors.textSecondary }]}>Ordenar:</Text>
-        {['confianca', 'odd'].map(s => (
+      {/* Sport filter */}
+      <View style={s.filterRow}>
+        {SPORTS_FILTER.map(f => (
           <TouchableOpacity
-            key={s}
-            style={[styles.sortBtn, sortBy === s && { backgroundColor: colors.primary }]}
-            onPress={() => setSortBy(s)}
+            key={f}
+            style={[s.filterChip, { borderColor: sportFilter === f ? colors.primary : colors.border }, sportFilter === f && { backgroundColor: colors.primary }]}
+            onPress={() => setSportFilter(f)}
           >
-            <Text style={[styles.sortBtnText, { color: sortBy === s ? '#fff' : colors.textSecondary }]}>
-              {s === 'confianca' ? 'Confiança' : 'Odd'}
+            <Text style={[s.filterText, { color: sportFilter === f ? '#fff' : colors.textSecondary }]}>
+              {f === 'Todos' ? 'Todos' : f === 'futebol' ? '⚽ Futebol' : '🏀 Basquete'}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Sport filter */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={styles.filterRow}
-      >
-        {SPORTS.map(s => (
-          <FilterChip
-            key={s}
-            label={s === 'Todos' ? 'Todos' : s.charAt(0).toUpperCase() + s.slice(1)}
-            active={sport === s}
-            color={colors.primary}
-            onPress={() => setSport(s)}
-          />
-        ))}
-        <View style={styles.divider} />
-        {RISKS.map(r => (
-          <FilterChip
-            key={r}
-            label={r === 'Todos' ? 'Risco' : r.charAt(0).toUpperCase() + r.slice(1)}
-            active={risco === r}
-            color={colors.warning}
-            onPress={() => setRisco(r)}
-          />
-        ))}
-      </ScrollView>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.list}>
+        {filtered.map(sug => (
+          <View key={sug.id} style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={s.cardTop}>
+              <Text style={{ fontSize: 20 }}>{sug.esporte === 'basquete' ? '🏀' : '⚽'}</Text>
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={[s.liga, { color: colors.textSecondary }]}>{sug.liga}</Text>
+                <Text style={[s.jogoLabel, { color: colors.textSecondary }]}>{getJogoLabel(sug.daysAhead, sug.hour)}</Text>
+              </View>
+            </View>
 
-      {/* Tipo filter */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={styles.filterRow}
-      >
-        {TIPO_GROUPS.map(g => (
-          <FilterChip
-            key={g.label}
-            label={g.label}
-            active={tipoLabel === g.label}
-            color={colors.secondary || '#8b5cf6'}
-            onPress={() => setTipoLabel(g.label)}
-          />
-        ))}
-      </ScrollView>
+            <Text style={[s.teams, { color: colors.text }]}>{sug.time1} vs {sug.time2}</Text>
 
-      {/* Odd range */}
-      <View style={styles.oddRow}>
-        <Ionicons name="filter" size={14} color={colors.textSecondary} />
-        <Text style={[styles.oddLabel, { color: colors.textSecondary }]}>Odd:</Text>
-        <TextInput
-          style={[styles.oddInput, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]}
-          placeholder="Min"
-          placeholderTextColor={colors.textSecondary}
-          keyboardType="decimal-pad"
-          value={oddMin}
-          onChangeText={setOddMin}
-        />
-        <Text style={[styles.oddLabel, { color: colors.textSecondary }]}>—</Text>
-        <TextInput
-          style={[styles.oddInput, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]}
-          placeholder="Max"
-          placeholderTextColor={colors.textSecondary}
-          keyboardType="decimal-pad"
-          value={oddMax}
-          onChangeText={setOddMax}
-        />
-      </View>
+            <View style={[s.tipoBadge, { backgroundColor: colors.primary + '22' }]}>
+              <Ionicons name="bulb-outline" size={13} color={colors.primary} />
+              <Text style={[s.tipoText, { color: colors.primary }]}>{sug.tipo}</Text>
+            </View>
 
-      {/* List */}
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-        {filtered.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={{ fontSize: 48 }}>🔍</Text>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Nenhuma sugestão encontrada</Text>
+            <ConfidenceBar value={sug.confianca} colors={colors} />
+
+            <TouchableOpacity style={[s.apostarBtn, { backgroundColor: colors.primary }]} onPress={() => openModal(sug)}>
+              <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
+              <Text style={s.apostarBtnText}>Registrar Aposta</Text>
+            </TouchableOpacity>
           </View>
-        ) : (
-          filtered.map(bet => (
-            <BetCard key={bet.id} bet={bet} onAdd={openAddModal} theme={{ colors, isDark: false }} />
-          ))
-        )}
+        ))}
         <View style={{ height: 32 }} />
       </ScrollView>
 
-      {/* Add Modal */}
-      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.overlay}>
-          <View style={[styles.modal, { backgroundColor: colors.card }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Registrar Aposta</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+      {/* Bet modal */}
+      <Modal visible={showModal} transparent animationType="slide" onRequestClose={() => setShowModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.overlay}>
+          <View style={[s.modal, { backgroundColor: colors.card }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: colors.text }]}>Registrar Aposta</Text>
+              <TouchableOpacity onPress={() => setShowModal(false)}>
                 <Ionicons name="close" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
-
-            {selectedBet && (
+            {selected && (
               <>
-                <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-                  {selectedBet.time1} vs {selectedBet.time2}
-                </Text>
-                <View style={styles.modalInfo}>
-                  <View style={styles.modalInfoItem}>
-                    <Text style={[styles.modalInfoLabel, { color: colors.textSecondary }]}>Odd</Text>
-                    <Text style={[styles.modalInfoValue, { color: colors.primary }]}>{selectedBet.odd.toFixed(2)}</Text>
-                  </View>
-                  <View style={styles.modalInfoItem}>
-                    <Text style={[styles.modalInfoLabel, { color: colors.textSecondary }]}>Tipo</Text>
-                    <Text style={[styles.modalInfoValue, { color: colors.text, fontSize: 14 }]}>{selectedBet.tipo}</Text>
-                  </View>
-                  <View style={styles.modalInfoItem}>
-                    <Text style={[styles.modalInfoLabel, { color: colors.textSecondary }]}>Potencial</Text>
-                    <Text style={[styles.modalInfoValue, { color: colors.success }]}>
-                      {stakeInput ? formatBRL(parseFloat(stakeInput.replace(',', '.')) * selectedBet.odd) : '—'}
-                    </Text>
-                  </View>
+                <Text style={[s.modalSub, { color: colors.textSecondary }]}>{selected.time1} vs {selected.time2}</Text>
+                <View style={[s.tipoBadge, { backgroundColor: colors.primary + '22', marginBottom: 16 }]}>
+                  <Text style={[s.tipoText, { color: colors.primary }]}>{selected.tipo}</Text>
                 </View>
 
-                <Text style={[styles.stakeLabel, { color: colors.textSecondary }]}>
-                  Valor da aposta (Kelly: {formatBRL(calculateBetSize(banca.saldo, selectedBet.odd, selectedBet.confianca, banca.nivelRisco).amount)})
-                </Text>
-                <TextInput
-                  style={[styles.stakeInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.primary }]}
-                  value={stakeInput}
-                  onChangeText={setStakeInput}
-                  keyboardType="decimal-pad"
-                  placeholder="0.00"
-                  placeholderTextColor={colors.textSecondary}
-                />
-                <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.primary }]} onPress={handleAdd}>
-                  <Text style={styles.addBtnText}>Registrar Aposta</Text>
+                <Text style={[s.inputLabel, { color: colors.textSecondary }]}>Valor Apostado (R$)</Text>
+                <TextInput style={[s.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]} value={valor} onChangeText={setValor} keyboardType="decimal-pad" placeholder="Ex: 50.00" placeholderTextColor={colors.textSecondary} />
+
+                <Text style={[s.inputLabel, { color: colors.textSecondary }]}>Odd da Casa</Text>
+                <TextInput style={[s.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]} value={odd} onChangeText={setOdd} keyboardType="decimal-pad" placeholder="Ex: 1.85" placeholderTextColor={colors.textSecondary} />
+
+                {valor && odd && parseFloat(odd) > 1 && (
+                  <View style={[s.calcRow, { backgroundColor: colors.success + '11' }]}>
+                    <Text style={[s.calcText, { color: colors.success }]}>
+                      Retorno potencial: +{formatBRL(parseFloat(valor.replace(',','.') || 0) * (parseFloat(odd.replace(',','.') || 1) - 1))}
+                    </Text>
+                  </View>
+                )}
+
+                <Text style={[s.inputLabel, { color: colors.textSecondary }]}>Resultado</Text>
+                <View style={s.resultRow}>
+                  {[{ v: 'win', label: '✅ Vencedora', color: colors.success }, { v: 'loss', label: '❌ Perdedora', color: colors.danger }].map(r => (
+                    <TouchableOpacity
+                      key={r.v}
+                      style={[s.resultBtn, { borderColor: resultado === r.v ? r.color : colors.border }, resultado === r.v && { backgroundColor: r.color + '22' }]}
+                      onPress={() => setResultado(r.v)}
+                    >
+                      <Text style={[s.resultBtnText, { color: resultado === r.v ? r.color : colors.textSecondary }]}>{r.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TouchableOpacity style={[s.confirmBtn, { backgroundColor: colors.primary }]} onPress={confirmAposta}>
+                  <Text style={s.confirmBtnText}>Confirmar Aposta</Text>
                 </TouchableOpacity>
               </>
             )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Manual modal */}
+      <Modal visible={showManual} transparent animationType="slide" onRequestClose={() => setShowManual(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.overlay}>
+          <ScrollView style={[s.modal, { backgroundColor: colors.card }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: colors.text }]}>Aposta Manual</Text>
+              <TouchableOpacity onPress={() => setShowManual(false)}>
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {[
+              { label: 'Time A / Equipe A', value: mTime1, set: setMTime1 },
+              { label: 'Time B / Equipe B', value: mTime2, set: setMTime2 },
+              { label: 'Tipo de Aposta', value: mTipo, set: setMTipo, placeholder: 'Ex: Mais de 2.5 Gols' },
+              { label: 'Valor Apostado (R$)', value: mValor, set: setMValor, keyboard: 'decimal-pad' },
+              { label: 'Odd', value: mOdd, set: setMOdd, keyboard: 'decimal-pad' },
+            ].map(f => (
+              <View key={f.label}>
+                <Text style={[s.inputLabel, { color: colors.textSecondary }]}>{f.label}</Text>
+                <TextInput
+                  style={[s.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                  value={f.value} onChangeText={f.set}
+                  keyboardType={f.keyboard || 'default'}
+                  placeholder={f.placeholder || f.label}
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+            ))}
+
+            <Text style={[s.inputLabel, { color: colors.textSecondary }]}>Esporte</Text>
+            <View style={s.resultRow}>
+              {['futebol', 'basquete'].map(e => (
+                <TouchableOpacity key={e} style={[s.resultBtn, { borderColor: mEsporte === e ? colors.primary : colors.border }, mEsporte === e && { backgroundColor: colors.primary + '22' }]} onPress={() => setMEsporte(e)}>
+                  <Text style={[s.resultBtnText, { color: mEsporte === e ? colors.primary : colors.textSecondary }]}>{e === 'futebol' ? '⚽ Futebol' : '🏀 Basquete'}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[s.inputLabel, { color: colors.textSecondary }]}>Resultado</Text>
+            <View style={s.resultRow}>
+              {[{ v: 'win', label: '✅ Vencedora', color: colors.success }, { v: 'loss', label: '❌ Perdedora', color: colors.danger }].map(r => (
+                <TouchableOpacity key={r.v} style={[s.resultBtn, { borderColor: mResultado === r.v ? r.color : colors.border }, mResultado === r.v && { backgroundColor: r.color + '22' }]} onPress={() => setMResultado(r.v)}>
+                  <Text style={[s.resultBtnText, { color: mResultado === r.v ? r.color : colors.textSecondary }]}>{r.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity style={[s.confirmBtn, { backgroundColor: colors.primary, marginBottom: 32 }]} onPress={confirmManual}>
+              <Text style={s.confirmBtnText}>Adicionar Aposta</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   safe: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   title: { fontSize: 22, fontWeight: '800' },
-  count: { fontSize: 13 },
-  sortRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 4,
-    gap: 8,
-  },
-  sortLabel: { fontSize: 12 },
-  sortBtn: {
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'transparent',
-  },
-  sortBtnText: { fontSize: 12, fontWeight: '600' },
-  filterScroll: { flexGrow: 0, flexShrink: 0 },
-  filterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
-  chip: {
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 6,
-  },
-  chipText: { fontSize: 12, fontWeight: '600' },
-  divider: { width: 1, height: 22, backgroundColor: 'rgba(128,128,128,0.3)', marginRight: 6 },
-  oddRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    gap: 8,
-  },
-  oddLabel: { fontSize: 12 },
-  oddInput: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    width: 70,
-    fontSize: 13,
-  },
-  list: { paddingTop: 4 },
-  empty: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  emptyText: { fontSize: 14 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modal: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
+  manualBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
+  manualBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  filterRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 8 },
+  filterChip: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 7 },
+  filterText: { fontSize: 13, fontWeight: '600' },
+  list: { paddingHorizontal: 16, paddingTop: 4 },
+  card: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  liga: { fontSize: 12, fontWeight: '600' },
+  jogoLabel: { fontSize: 11, marginTop: 1 },
+  teams: { fontSize: 17, fontWeight: '800', marginBottom: 10 },
+  tipoBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start' },
+  tipoText: { fontSize: 13, fontWeight: '700' },
+  apostarBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, padding: 14, marginTop: 12 },
+  apostarBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  modal: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   modalTitle: { fontSize: 18, fontWeight: '700' },
-  modalSubtitle: { fontSize: 13, marginBottom: 16 },
-  modalInfo: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  modalInfoItem: { alignItems: 'center' },
-  modalInfoLabel: { fontSize: 11 },
-  modalInfoValue: { fontSize: 18, fontWeight: '700', marginTop: 4 },
-  stakeLabel: { fontSize: 12, marginBottom: 8 },
-  stakeInput: {
-    borderRadius: 12,
-    borderWidth: 2,
-    padding: 14,
-    fontSize: 24,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  addBtn: { borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 8 },
-  addBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  modalSub: { fontSize: 13, marginBottom: 12 },
+  inputLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 12 },
+  input: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
+  calcRow: { borderRadius: 8, padding: 10, marginTop: 8 },
+  calcText: { fontSize: 13, fontWeight: '700' },
+  resultRow: { flexDirection: 'row', gap: 10, marginTop: 2 },
+  resultBtn: { flex: 1, borderRadius: 10, borderWidth: 1.5, padding: 12, alignItems: 'center' },
+  resultBtnText: { fontSize: 13, fontWeight: '700' },
+  confirmBtn: { borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 20 },
+  confirmBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });
