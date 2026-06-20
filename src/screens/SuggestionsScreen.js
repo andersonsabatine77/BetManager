@@ -13,16 +13,56 @@ import { calculateBetSize } from '../utils/kelly';
 
 const SPORTS = ['Todos', 'futebol', 'basquete', 'tenis'];
 const RISKS = ['Todos', 'baixo', 'medio', 'alto'];
-const TIPOS = ['Todos', '1', 'X', '2', 'Over', 'Under', 'AH'];
+
+// Bet type groups for UI — each label maps to one or more tipo values
+const TIPO_GROUPS = [
+  { label: 'Todos',      tipos: null },
+  { label: '1',          tipos: ['1'] },
+  { label: 'X',          tipos: ['X'] },
+  { label: '2',          tipos: ['2'] },
+  { label: 'Over 0.5',   tipos: ['Over 0.5'] },
+  { label: 'Over 1.5',   tipos: ['Over 1.5'] },
+  { label: 'Over 2.5',   tipos: ['Over 2.5'] },
+  { label: 'Over 3.5',   tipos: ['Over 3.5'] },
+  { label: 'Under 1.5',  tipos: ['Under 1.5'] },
+  { label: 'Under 2.5',  tipos: ['Under 2.5'] },
+  { label: 'Under 3.5',  tipos: ['Under 3.5'] },
+  { label: 'BTTS Sim',   tipos: ['BTTS Sim'] },
+  { label: 'BTTS Não',   tipos: ['BTTS Não'] },
+  { label: 'Esc +8.5',   tipos: ['Esc +8.5'] },
+  { label: 'Esc +9.5',   tipos: ['Esc +9.5'] },
+  { label: 'Esc +10.5',  tipos: ['Esc +10.5'] },
+  { label: 'Esc -9.5',   tipos: ['Esc -9.5'] },
+  { label: 'Cart +3.5',  tipos: ['Cart +3.5'] },
+  { label: 'Cart +4.5',  tipos: ['Cart +4.5'] },
+  { label: 'AH -0.5',    tipos: ['AH -0.5'] },
+  { label: 'AH +0.5',    tipos: ['AH +0.5'] },
+];
+
+function FilterChip({ label, active, color, onPress }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[
+        styles.chip,
+        { borderColor: active ? color : 'rgba(128,128,128,0.35)' },
+        active && { backgroundColor: color },
+      ]}
+    >
+      <Text style={[styles.chipText, { color: active ? '#fff' : '#9ca3af' }]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
 
 export default function SuggestionsScreen() {
-  const { colors, isDark } = useTheme();
-  const theme = { colors, isDark };
+  const { colors } = useTheme();
   const { sugestoes, addAposta, banca } = useApp();
 
   const [sport, setSport] = useState('Todos');
   const [risco, setRisco] = useState('Todos');
-  const [tipo, setTipo] = useState('Todos');
+  const [tipoLabel, setTipoLabel] = useState('Todos');
   const [oddMin, setOddMin] = useState('');
   const [oddMax, setOddMax] = useState('');
   const [sortBy, setSortBy] = useState('confianca');
@@ -31,21 +71,23 @@ export default function SuggestionsScreen() {
   const [stakeInput, setStakeInput] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
 
+  const activeTipos = useMemo(() => {
+    const g = TIPO_GROUPS.find(g => g.label === tipoLabel);
+    return g ? g.tipos : null;
+  }, [tipoLabel]);
+
   const filtered = useMemo(() => {
     let arr = [...sugestoes];
     if (sport !== 'Todos') arr = arr.filter(s => s.esporte === sport);
     if (risco !== 'Todos') arr = arr.filter(s => s.risco === risco);
-    if (tipo !== 'Todos') arr = arr.filter(s => s.tipo === tipo);
+    if (activeTipos) arr = arr.filter(s => activeTipos.includes(s.tipo));
     if (oddMin) arr = arr.filter(s => s.odd >= parseFloat(oddMin));
     if (oddMax) arr = arr.filter(s => s.odd <= parseFloat(oddMax));
-
-    arr.sort((a, b) => {
-      if (sortBy === 'confianca') return b.confianca - a.confianca;
-      if (sortBy === 'odd') return b.odd - a.odd;
-      return 0;
-    });
+    arr.sort((a, b) =>
+      sortBy === 'confianca' ? b.confianca - a.confianca : b.odd - a.odd
+    );
     return arr;
-  }, [sugestoes, sport, risco, tipo, oddMin, oddMax, sortBy]);
+  }, [sugestoes, sport, risco, activeTipos, oddMin, oddMax, sortBy]);
 
   function openAddModal(bet) {
     setSelectedBet(bet);
@@ -80,7 +122,7 @@ export default function SuggestionsScreen() {
         <Text style={[styles.count, { color: colors.textSecondary }]}>{filtered.length} apostas</Text>
       </View>
 
-      {/* Sort */}
+      {/* Sort row */}
       <View style={styles.sortRow}>
         <Text style={[styles.sortLabel, { color: colors.textSecondary }]}>Ordenar:</Text>
         {['confianca', 'odd'].map(s => (
@@ -96,30 +138,49 @@ export default function SuggestionsScreen() {
         ))}
       </View>
 
-      {/* Filters */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
+      {/* Sport filter */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
+        contentContainerStyle={styles.filterRow}
+      >
         {SPORTS.map(s => (
-          <TouchableOpacity
+          <FilterChip
             key={s}
-            style={[styles.chip, { borderColor: colors.border }, sport === s && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+            label={s === 'Todos' ? 'Todos' : s.charAt(0).toUpperCase() + s.slice(1)}
+            active={sport === s}
+            color={colors.primary}
             onPress={() => setSport(s)}
-          >
-            <Text style={[styles.chipText, { color: sport === s ? '#fff' : colors.textSecondary }]}>
-              {s === 'Todos' ? 'Todos' : s.charAt(0).toUpperCase() + s.slice(1)}
-            </Text>
-          </TouchableOpacity>
+          />
         ))}
-        <View style={styles.chipDivider} />
+        <View style={styles.divider} />
         {RISKS.map(r => (
-          <TouchableOpacity
+          <FilterChip
             key={r}
-            style={[styles.chip, { borderColor: colors.border }, risco === r && { backgroundColor: colors.warning, borderColor: colors.warning }]}
+            label={r === 'Todos' ? 'Risco' : r.charAt(0).toUpperCase() + r.slice(1)}
+            active={risco === r}
+            color={colors.warning}
             onPress={() => setRisco(r)}
-          >
-            <Text style={[styles.chipText, { color: risco === r ? '#fff' : colors.textSecondary }]}>
-              {r === 'Todos' ? 'Risco: Todos' : r.charAt(0).toUpperCase() + r.slice(1)}
-            </Text>
-          </TouchableOpacity>
+          />
+        ))}
+      </ScrollView>
+
+      {/* Tipo filter */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
+        contentContainerStyle={styles.filterRow}
+      >
+        {TIPO_GROUPS.map(g => (
+          <FilterChip
+            key={g.label}
+            label={g.label}
+            active={tipoLabel === g.label}
+            color={colors.secondary || '#8b5cf6'}
+            onPress={() => setTipoLabel(g.label)}
+          />
         ))}
       </ScrollView>
 
@@ -151,13 +212,11 @@ export default function SuggestionsScreen() {
         {filtered.length === 0 ? (
           <View style={styles.empty}>
             <Text style={{ fontSize: 48 }}>🔍</Text>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              Nenhuma sugestão encontrada
-            </Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Nenhuma sugestão encontrada</Text>
           </View>
         ) : (
           filtered.map(bet => (
-            <BetCard key={bet.id} bet={bet} onAdd={openAddModal} theme={theme} />
+            <BetCard key={bet.id} bet={bet} onAdd={openAddModal} theme={{ colors, isDark: false }} />
           ))
         )}
         <View style={{ height: 32 }} />
@@ -186,7 +245,7 @@ export default function SuggestionsScreen() {
                   </View>
                   <View style={styles.modalInfoItem}>
                     <Text style={[styles.modalInfoLabel, { color: colors.textSecondary }]}>Tipo</Text>
-                    <Text style={[styles.modalInfoValue, { color: colors.text }]}>{selectedBet.tipo}</Text>
+                    <Text style={[styles.modalInfoValue, { color: colors.text, fontSize: 14 }]}>{selectedBet.tipo}</Text>
                   </View>
                   <View style={styles.modalInfoItem}>
                     <Text style={[styles.modalInfoLabel, { color: colors.textSecondary }]}>Potencial</Text>
@@ -207,11 +266,7 @@ export default function SuggestionsScreen() {
                   placeholder="0.00"
                   placeholderTextColor={colors.textSecondary}
                 />
-
-                <TouchableOpacity
-                  style={[styles.addBtn, { backgroundColor: colors.primary }]}
-                  onPress={handleAdd}
-                >
+                <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.primary }]} onPress={handleAdd}>
                   <Text style={styles.addBtnText}>Registrar Aposta</Text>
                 </TouchableOpacity>
               </>
@@ -239,27 +294,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    gap: 8,
     marginBottom: 4,
+    gap: 8,
   },
   sortLabel: { fontSize: 12 },
   sortBtn: {
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingVertical: 6,
     backgroundColor: 'transparent',
   },
   sortBtnText: { fontSize: 12, fontWeight: '600' },
-  filterScroll: { maxHeight: 48 },
-  filterRow: { paddingHorizontal: 12, paddingVertical: 8, gap: 8, alignItems: 'center' },
-  chip: {
-    borderRadius: 20,
+  filterScroll: { flexGrow: 0, flexShrink: 0 },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 5,
+  },
+  chip: {
+    borderRadius: 20,
     borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 6,
   },
   chipText: { fontSize: 12, fontWeight: '600' },
-  chipDivider: { width: 1, height: 24, backgroundColor: 'rgba(128,128,128,0.3)' },
+  divider: { width: 1, height: 22, backgroundColor: 'rgba(128,128,128,0.3)', marginRight: 6 },
   oddRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -279,16 +340,8 @@ const styles = StyleSheet.create({
   list: { paddingTop: 4 },
   empty: { alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyText: { fontSize: 14 },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modal: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-  },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modal: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -311,11 +364,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
   },
-  addBtn: {
-    borderRadius: 14,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
+  addBtn: { borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 8 },
   addBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

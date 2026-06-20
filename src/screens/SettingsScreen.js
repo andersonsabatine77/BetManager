@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch,
-  TextInput, Alert, Platform,
+  TextInput, Alert, Platform, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useApp } from '../context/AppContext';
 import { clearAllData } from '../services/database';
 import { formatBRL } from '../utils/calculations';
+import { getApiKey, saveApiKey } from '../services/liveService';
 
 const RISK_LEVELS = ['conservador', 'moderado', 'agressivo'];
 const CASAS_LIST = ['Bet365', 'Betfair', 'Pinnacle', '1xBet', 'Betano'];
@@ -58,6 +59,12 @@ export default function SettingsScreen() {
     CASAS_LIST.reduce((acc, c) => ({ ...acc, [c]: true }), {})
   );
   const [saved, setSaved] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [apiKeySaved, setApiKeySaved] = useState(false);
+
+  useEffect(() => {
+    getApiKey().then(k => { if (k) setApiKey(k); });
+  }, []);
 
   useEffect(() => {
     setSaldo(String(banca.saldoInicial));
@@ -115,6 +122,42 @@ export default function SettingsScreen() {
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>Configurações</Text>
         </View>
+
+        {/* API de Futebol */}
+        <Section title="API de Futebol (Dados Ao Vivo)" colors={colors}>
+          <View style={[styles.inputRow, { borderBottomColor: 'transparent' }]}>
+            <View style={[styles.rowIcon, { backgroundColor: colors.primary + '22' }]}>
+              <Ionicons name="key" size={16} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: colors.text }]}>football-data.org API Key</Text>
+              <Text style={[styles.apiHint, { color: colors.textSecondary }]}>
+                Grátis em football-data.org — cobre Premier League, Bundesliga, Brasileirão e mais
+              </Text>
+              <TextInput
+                style={[styles.apiInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                value={apiKey}
+                onChangeText={setApiKey}
+                placeholder="Cole sua chave aqui"
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                style={[styles.apiSaveBtn, { backgroundColor: apiKeySaved ? colors.success : colors.primary }]}
+                onPress={async () => {
+                  if (!apiKey.trim()) return Alert.alert('Erro', 'Chave não pode estar vazia.');
+                  await saveApiKey(apiKey);
+                  setApiKeySaved(true);
+                  setTimeout(() => setApiKeySaved(false), 2000);
+                }}
+              >
+                <Ionicons name={apiKeySaved ? 'checkmark' : 'save'} size={14} color="#fff" />
+                <Text style={styles.apiSaveBtnText}>{apiKeySaved ? 'Salvo!' : 'Salvar Chave'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Section>
 
         {/* Banca */}
         <Section title="Banca" colors={colors}>
@@ -396,4 +439,14 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  apiHint: { fontSize: 11, marginBottom: 8, lineHeight: 16 },
+  apiInput: {
+    borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8,
+    fontSize: 13, marginBottom: 8,
+  },
+  apiSaveBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, alignSelf: 'flex-start',
+  },
+  apiSaveBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 });

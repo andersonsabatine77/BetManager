@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,7 +10,6 @@ import { getSportEmoji } from '../utils/calculations';
 
 function PulsingDot({ color }) {
   const anim = React.useRef(new Animated.Value(1)).current;
-
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -19,13 +18,11 @@ function PulsingDot({ color }) {
       ])
     ).start();
   }, [anim]);
-
-  return (
-    <Animated.View style={[styles.dot, { backgroundColor: color, opacity: anim }]} />
-  );
+  return <Animated.View style={[styles.dot, { backgroundColor: color, opacity: anim }]} />;
 }
 
 function OddsMovement({ value, colors }) {
+  if (value === null || value === undefined) return null;
   const isPositive = value >= 0;
   const color = isPositive ? colors.success : colors.danger;
   return (
@@ -38,13 +35,37 @@ function OddsMovement({ value, colors }) {
   );
 }
 
+function StatusBadge({ status, minuto, colors }) {
+  if (!status) {
+    return (
+      <View style={styles.liveRow}>
+        <PulsingDot color={colors.live} />
+        <Text style={[styles.liveLabel, { color: colors.live }]}>AO VIVO</Text>
+      </View>
+    );
+  }
+  const label =
+    status === 'IN_PLAY' ? (minuto ? `${minuto}'` : 'EM JOGO') :
+    status === 'PAUSED' ? 'INTERVALO' :
+    status === 'SCHEDULED' ? 'Em breve' : 'AO VIVO';
+  const isLive = status === 'IN_PLAY' || status === 'PAUSED';
+  return (
+    <View style={styles.liveRow}>
+      {isLive && <PulsingDot color={colors.live} />}
+      <Text style={[styles.liveLabel, { color: isLive ? colors.live : colors.textSecondary }]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
 export default function LiveScreen() {
-  const { colors, isDark } = useTheme();
-  const { liveGames } = useApp();
+  const { colors } = useTheme();
+  const { liveGames, liveHasKey, liveError, fetchLive } = useApp();
   const [expanded, setExpanded] = useState(null);
   const [countdown, setCountdown] = useState(30);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Countdown to next refresh
   useEffect(() => {
     const timer = setInterval(() => {
       setCountdown(prev => {
@@ -54,6 +75,13 @@ export default function LiveScreen() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await fetchLive();
+    setRefreshing(false);
+    setCountdown(30);
+  }
 
   function toggleExpand(id) {
     setExpanded(prev => (prev === id ? null : id));
@@ -66,17 +94,57 @@ export default function LiveScreen() {
         <View style={styles.headerLeft}>
           <PulsingDot color={colors.live} />
           <Text style={[styles.title, { color: colors.text }]}>Ao Vivo</Text>
-          <View style={[styles.countBadge, { backgroundColor: colors.live + '22' }]}>
-            <Text style={[styles.countText, { color: colors.live }]}>{liveGames.length}</Text>
+          {liveGames.length > 0 && (
+            <View style={[styles.countBadge, { backgroundColor: colors.live + '22' }]}>
+              <Text style={[styles.countText, { color: colors.live }]}>{liveGames.length}</Text>
+            </View>
+          )}
+        </View>
+        <TouchableOpacity style={styles.refreshRow} onPress={handleRefresh} disabled={refreshing}>
+          {refreshing
+            ? <ActivityIndicator size="small" color={colors.textSecondary} />
+            : <Ionicons name="refresh" size={14} color={colors.textSecondary} />}
+          <Text style={[styles.refreshText, { color: colors.textSecondary }]}>
+            {refreshing ? 'Atualizando...' : `Atualiza em ${countdown}s`}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* No API key banner */}
+      {liveHasKey === false && (
+        <View style={[styles.banner, { backgroundColor: colors.warning + '22', borderColor: colors.warning }]}>
+          <Ionicons name="key" size={18} color={colors.warning} />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={[styles.bannerTitle, { color: colors.warning }]}>Dados ao vivo não configurados</Text>
+            <Text style={[styles.bannerDesc, { color: colors.text }]}>
+              Para ver jogos reais, configure sua chave gratuita de football-data.org em Configurações → API de Futebol.
+            </Text>
           </View>
         </View>
-        <View style={styles.refreshRow}>
-          <Ionicons name="refresh" size={14} color={colors.textSecondary} />
-          <Text style={[styles.refreshText, { color: colors.textSecondary }]}>
-            Atualiza em {countdown}s
+      )}
+
+      {/* API error */}
+      {liveHasKey && liveError && (
+        <View style={[styles.banner, { backgroundColor: colors.danger + '22', borderColor: colors.danger }]}>
+          <Ionicons name="alert-circle" size={18} color={colors.danger} />
+          <Text style={[styles.bannerDesc, { color: colors.text, marginLeft: 10, flex: 1 }]}>
+            Erro na API: {liveError}
           </Text>
         </View>
-      </View>
+      )}
+
+      {/* No games */}
+      {liveHasKey && !liveError && liveGames.length === 0 && (
+        <View style={styles.emptyLive}>
+          <Text style={{ fontSize: 42 }}>📡</Text>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            Nenhum jogo ao vivo no momento
+          </Text>
+          <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
+            Os jogos de hoje aparecerão aqui quando iniciarem
+          </Text>
+        </View>
+      )}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
         {liveGames.map(game => (
@@ -93,12 +161,7 @@ export default function LiveScreen() {
               </View>
               <View style={styles.cardMeta}>
                 <Text style={[styles.liga, { color: colors.textSecondary }]}>{game.liga}</Text>
-                <View style={styles.liveRow}>
-                  <PulsingDot color={colors.live} />
-                  <Text style={[styles.liveLabel, { color: colors.live }]}>
-                    {game.minuto !== null ? `${game.minuto}'` : 'AO VIVO'}
-                  </Text>
-                </View>
+                <StatusBadge status={game.status} minuto={game.minuto} colors={colors} />
               </View>
               <Ionicons
                 name={expanded === game.id ? 'chevron-up' : 'chevron-down'}
@@ -116,69 +179,61 @@ export default function LiveScreen() {
               <Text style={[styles.teamName, styles.teamRight, { color: colors.text }]}>{game.time2}</Text>
             </View>
 
-            {/* Odds row */}
-            <View style={styles.oddsRow}>
-              {/* Casa */}
-              <View style={styles.oddItem}>
-                <Text style={[styles.oddLabel, { color: colors.textSecondary }]}>
-                  {game.esporte === 'tenis' || game.esporte === 'basquete' ? game.time1 : '1'}
-                </Text>
-                <Text style={[styles.oddValue, { color: colors.text }]}>{game.oddCasa.toFixed(2)}</Text>
-                <OddsMovement value={game.movimentoCasa} colors={colors} />
-              </View>
-
-              {/* Empate (futebol only) */}
-              {game.oddEmpate !== null && (
+            {/* Odds row — only if odds available */}
+            {game.oddCasa > 0 && (
+              <View style={styles.oddsRow}>
                 <View style={styles.oddItem}>
-                  <Text style={[styles.oddLabel, { color: colors.textSecondary }]}>X</Text>
-                  <Text style={[styles.oddValue, { color: colors.text }]}>{game.oddEmpate.toFixed(2)}</Text>
-                  <OddsMovement value={game.movimentoEmpate || 0} colors={colors} />
+                  <Text style={[styles.oddLabel, { color: colors.textSecondary }]}>
+                    {game.esporte === 'tenis' || game.esporte === 'basquete' ? game.time1.split(' ')[0] : '1'}
+                  </Text>
+                  <Text style={[styles.oddValue, { color: colors.text }]}>{game.oddCasa.toFixed(2)}</Text>
+                  <OddsMovement value={game.movimentoCasa} colors={colors} />
                 </View>
-              )}
 
-              {/* Fora */}
-              <View style={styles.oddItem}>
-                <Text style={[styles.oddLabel, { color: colors.textSecondary }]}>
-                  {game.esporte === 'tenis' || game.esporte === 'basquete' ? game.time2 : '2'}
-                </Text>
-                <Text style={[styles.oddValue, { color: colors.text }]}>{game.oddFora.toFixed(2)}</Text>
-                <OddsMovement value={game.movimentoFora} colors={colors} />
+                {game.oddEmpate !== null && game.oddEmpate > 0 && (
+                  <View style={styles.oddItem}>
+                    <Text style={[styles.oddLabel, { color: colors.textSecondary }]}>X</Text>
+                    <Text style={[styles.oddValue, { color: colors.text }]}>{game.oddEmpate.toFixed(2)}</Text>
+                    <OddsMovement value={game.movimentoEmpate || 0} colors={colors} />
+                  </View>
+                )}
+
+                <View style={styles.oddItem}>
+                  <Text style={[styles.oddLabel, { color: colors.textSecondary }]}>
+                    {game.esporte === 'tenis' || game.esporte === 'basquete' ? game.time2.split(' ')[0] : '2'}
+                  </Text>
+                  <Text style={[styles.oddValue, { color: colors.text }]}>{game.oddFora.toFixed(2)}</Text>
+                  <OddsMovement value={game.movimentoFora} colors={colors} />
+                </View>
               </View>
-            </View>
+            )}
 
-            {/* Expanded: in-game tips */}
+            {/* Expanded tips */}
             {expanded === game.id && (
               <View style={[styles.expandedSection, { borderTopColor: colors.border }]}>
                 <Text style={[styles.expandedTitle, { color: colors.textSecondary }]}>
-                  Sugestões In-Game
+                  Análise In-Game
                 </Text>
                 <View style={[styles.tipRow, { backgroundColor: colors.primary + '11' }]}>
                   <Ionicons name="bulb" size={14} color={colors.primary} />
                   <Text style={[styles.tipText, { color: colors.text }]}>
-                    Casa apresenta valor: odd {game.oddCasa.toFixed(2)} com movimento {game.movimentoCasa >= 0 ? 'positivo' : 'negativo'}
+                    {game.status === 'SCHEDULED'
+                      ? `Jogo inicia em breve — acompanhe as odds de abertura.`
+                      : `Placar atual: ${game.placar}. ${game.minuto ? `Minuto ${game.minuto}.` : ''}`}
                   </Text>
                 </View>
-                {game.oddEmpate && Math.abs(game.movimentoEmpate || 0) > 0.1 && (
+                {game.status === 'IN_PLAY' && game.minuto && game.minuto > 60 && (
                   <View style={[styles.tipRow, { backgroundColor: colors.warning + '11' }]}>
-                    <Ionicons name="alert-circle" size={14} color={colors.warning} />
+                    <Ionicons name="time" size={14} color={colors.warning} />
                     <Text style={[styles.tipText, { color: colors.text }]}>
-                      Odd de empate com movimento significativo ({game.movimentoEmpate >= 0 ? '+' : ''}{(game.movimentoEmpate || 0).toFixed(2)})
+                      Reta final — maior volatilidade nas odds. Cuidado com apostas ao vivo agora.
                     </Text>
                   </View>
                 )}
-                <View style={[styles.tipRow, { backgroundColor: colors.success + '11' }]}>
-                  <Ionicons name="stats-chart" size={14} color={colors.success} />
-                  <Text style={[styles.tipText, { color: colors.text }]}>
-                    {game.minuto !== null && game.minuto > 60
-                      ? `Minuto ${game.minuto}: apostas ao vivo com maior volatilidade.`
-                      : 'Mercado estável. Acompanhe os movimentos de odd.'}
-                  </Text>
-                </View>
               </View>
             )}
           </TouchableOpacity>
         ))}
-
         <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
@@ -202,17 +257,25 @@ const styles = StyleSheet.create({
   refreshRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   refreshText: { fontSize: 11 },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  bannerTitle: { fontSize: 13, fontWeight: '700', marginBottom: 2 },
+  bannerDesc: { fontSize: 12, lineHeight: 18 },
+  emptyLive: { alignItems: 'center', paddingTop: 60, gap: 8 },
+  emptyText: { fontSize: 15, fontWeight: '600', marginTop: 8 },
+  emptySubtext: { fontSize: 13, textAlign: 'center', paddingHorizontal: 32 },
   list: { paddingHorizontal: 16, paddingTop: 4 },
   card: {
-    borderRadius: 16,
-    padding: 14,
-    marginVertical: 5,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 3,
+    borderRadius: 16, padding: 14, marginVertical: 5,
+    borderWidth: 1, elevation: 3,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 },
   sportBadge: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(128,128,128,0.1)' },
