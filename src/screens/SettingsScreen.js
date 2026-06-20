@@ -159,7 +159,7 @@ export default function SettingsScreen() {
 
           <KeyRow
             icon="sparkles-outline"
-            title="Claude AI (Anthropic)"
+            title="Google Gemini AI"
             keyValue={anthropicKey}
             onConfigure={() => { setAnthropicInput(anthropicKey); setAnthropicModal(true); }}
             onRemove={() => Alert.alert('Remover chave?', 'Análise IA por jogo será desativada.', [
@@ -169,7 +169,7 @@ export default function SettingsScreen() {
           />
           <View style={[s.apiInfo, { borderTopColor: colors.border }]}>
             <Text style={[s.apiInfoText, { color: colors.textSecondary }]}>
-              Análise IA por jogo: gols, escanteios, cartões, resultado. Chave em console.anthropic.com
+              Análise IA gratuita por jogo: gols, escanteios, cartões, resultado. Chave GRATUITA em aistudio.google.com
             </Text>
           </View>
         </View>
@@ -239,13 +239,14 @@ export default function SettingsScreen() {
       <Modal visible={anthropicModal} transparent animationType="slide">
         <View style={s.overlay}>
           <View style={[s.modal, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[s.modalTitle, { color: colors.text }]}>Chave Claude AI</Text>
+            <Text style={[s.modalTitle, { color: colors.text }]}>Google Gemini AI</Text>
             <Text style={[s.modalSub, { color: colors.textSecondary }]}>
-              Obtenha em console.anthropic.com → API Keys{'\n'}
-              Usado para análise de gols, escanteios, cartões e resultado por jogo.{'\n'}
-              Custo: ~$0.001 por análise (muito barato)
+              🆓 100% gratuito — sem cartão de crédito{'\n'}
+              1. Acesse aistudio.google.com{'\n'}
+              2. Clique em "Get API Key"{'\n'}
+              3. Cole a chave abaixo (começa com AIza...)
             </Text>
-            <TextInput style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} placeholder="sk-ant-..." placeholderTextColor={colors.textSecondary} value={anthropicInput} onChangeText={setAnthropicInput} autoCapitalize="none" autoCorrect={false} />
+            <TextInput style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} placeholder="AIza..." placeholderTextColor={colors.textSecondary} value={anthropicInput} onChangeText={setAnthropicInput} autoCapitalize="none" autoCorrect={false} />
             <View style={s.modalBtns}>
               <TouchableOpacity style={[s.modalBtn, { borderColor: colors.border }]} onPress={() => setAnthropicModal(false)}>
                 <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancelar</Text>
