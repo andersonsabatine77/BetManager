@@ -21,15 +21,9 @@ class ErrorBoundary extends React.Component {
     if (this.state.error) {
       return (
         <ScrollView style={{ flex: 1, backgroundColor: '#0f172a', padding: 24 }}>
-          <Text style={{ color: '#f87171', fontSize: 18, fontWeight: 'bold', marginTop: 60 }}>
-            Erro na inicialização
-          </Text>
-          <Text style={{ color: '#f1f5f9', fontSize: 13, marginTop: 16, fontFamily: 'monospace' }}>
-            {this.state.error?.toString()}
-          </Text>
-          <Text style={{ color: '#94a3b8', fontSize: 11, marginTop: 16 }}>
-            {this.state.error?.stack}
-          </Text>
+          <Text style={{ color: '#f87171', fontSize: 18, fontWeight: 'bold', marginTop: 60 }}>Erro na inicialização</Text>
+          <Text style={{ color: '#f1f5f9', fontSize: 13, marginTop: 16, fontFamily: 'monospace' }}>{this.state.error?.toString()}</Text>
+          <Text style={{ color: '#94a3b8', fontSize: 11, marginTop: 16 }}>{this.state.error?.stack}</Text>
         </ScrollView>
       );
     }
@@ -42,19 +36,21 @@ import { AppProvider, useApp } from './src/context/AppContext';
 
 import HomeScreen from './src/screens/HomeScreen';
 import SuggestionsScreen from './src/screens/SuggestionsScreen';
+import LiveScreen from './src/screens/LiveScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import PerformanceScreen from './src/screens/PerformanceScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
 
-const TAB_ICONS = {
-  Home: { active: 'home', inactive: 'home-outline' },
-  Sugestões: { active: 'bulb', inactive: 'bulb-outline' },
-  Histórico: { active: 'time', inactive: 'time-outline' },
-  Desempenho: { active: 'bar-chart', inactive: 'bar-chart-outline' },
-  Config: { active: 'settings', inactive: 'settings-outline' },
-};
+const TABS = [
+  { name: 'Home',       component: HomeScreen,        active: 'home',      inactive: 'home-outline',      label: 'Home' },
+  { name: 'Sugestões',  component: SuggestionsScreen, active: 'bulb',      inactive: 'bulb-outline',      label: 'Sugestões' },
+  { name: 'Ao Vivo',    component: LiveScreen,        active: 'radio',     inactive: 'radio-outline',     label: 'Ao Vivo' },
+  { name: 'Histórico',  component: HistoryScreen,     active: 'time',      inactive: 'time-outline',      label: 'Histórico' },
+  { name: 'Desempenho', component: PerformanceScreen, active: 'bar-chart', inactive: 'bar-chart-outline', label: 'Stats' },
+  { name: 'Config',     component: SettingsScreen,    active: 'settings',  inactive: 'settings-outline',  label: 'Config' },
+];
 
 function AppNavigator() {
   const { colors, isDark } = useTheme();
@@ -65,44 +61,44 @@ function AppNavigator() {
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Tab.Navigator
-        screenOptions={({ route }) => ({
-          headerShown: false,
-          tabBarStyle: {
-            backgroundColor: colors.card,
-            borderTopColor: colors.border,
-            borderTopWidth: 1,
-            paddingBottom: 6,
-            paddingTop: 6,
-            height: 62,
-            elevation: 12,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -4 },
-            shadowOpacity: 0.08,
-            shadowRadius: 12,
-          },
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.textSecondary,
-          tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
-          tabBarIcon: ({ color, size, focused }) => {
-            const icons = TAB_ICONS[route.name] || { active: 'ellipse', inactive: 'ellipse-outline' };
-            return (
+        screenOptions={({ route }) => {
+          const tabDef = TABS.find(t => t.name === route.name) || {};
+          return {
+            headerShown: false,
+            tabBarStyle: {
+              backgroundColor: colors.card,
+              borderTopColor: colors.border,
+              borderTopWidth: 1,
+              paddingBottom: 4,
+              paddingTop: 4,
+              height: 58,
+              elevation: 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.08,
+              shadowRadius: 12,
+            },
+            tabBarActiveTintColor: colors.primary,
+            tabBarInactiveTintColor: colors.textSecondary,
+            tabBarLabelStyle: { fontSize: 9, fontWeight: '600', marginTop: 1 },
+            tabBarLabel: tabDef.label || route.name,
+            tabBarIcon: ({ color, size, focused }) => (
               <View>
-                <Ionicons name={focused ? icons.active : icons.inactive} size={size} color={color} />
+                <Ionicons name={focused ? tabDef.active : tabDef.inactive} size={size} color={color} />
                 {route.name === 'Sugestões' && sugCount > 0 && (
                   <View style={[styles.badge, { backgroundColor: colors.primary }]}>
                     <Text style={styles.badgeText}>{sugCount > 99 ? '99+' : sugCount}</Text>
                   </View>
                 )}
+                {route.name === 'Ao Vivo' && (
+                  <View style={[styles.liveDot, { backgroundColor: '#ef4444' }]} />
+                )}
               </View>
-            );
-          },
-        })}
+            ),
+          };
+        }}
       >
-        <Tab.Screen name="Home" component={HomeScreen} />
-        <Tab.Screen name="Sugestões" component={SuggestionsScreen} />
-        <Tab.Screen name="Histórico" component={HistoryScreen} />
-        <Tab.Screen name="Desempenho" component={PerformanceScreen} />
-        <Tab.Screen name="Config" component={SettingsScreen} />
+        {TABS.map(t => <Tab.Screen key={t.name} name={t.name} component={t.component} />)}
       </Tab.Navigator>
     </>
   );
@@ -110,10 +106,7 @@ function AppNavigator() {
 
 export default function App() {
   const [fontsLoaded] = useFonts({ ...Ionicons.font });
-
-  if (!fontsLoaded) {
-    return <View style={{ flex: 1, backgroundColor: '#0f172a' }} />;
-  }
+  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: '#0f172a' }} />;
 
   return (
     <ErrorBoundary>
@@ -133,16 +126,7 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  badge: {
-    position: 'absolute',
-    top: -4,
-    right: -8,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
+  badge: { position: 'absolute', top: -4, right: -8, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
+  liveDot: { position: 'absolute', top: -2, right: -4, width: 6, height: 6, borderRadius: 3 },
 });
