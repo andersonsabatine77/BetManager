@@ -1,10 +1,6 @@
 node_modules/
 .git/
 *.log
-*.png
-*.jpg
-*.jpeg
-*.gif
 *.mp4
 *.mov
 *.avi
