@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Modal, TextInput, KeyboardAvoidingView, Platform, Alert,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,7 +10,6 @@ import { useTheme } from '../context/ThemeContext';
 import { useApp } from '../context/AppContext';
 import { formatBRL, getJogoLabel } from '../utils/formatters';
 
-const RISCO_COLOR = { baixo: '#10b981', medio: '#f59e0b', alto: '#ef4444' };
 const SPORTS_FILTER = ['Todos', 'futebol', 'basquete'];
 
 function ConfidenceBar({ value, colors }) {
@@ -27,17 +27,32 @@ function ConfidenceBar({ value, colors }) {
   );
 }
 
+function ApiKeyBanner({ error, colors, onNavigate }) {
+  if (!error || error === 'NO_KEY') return null;
+  return (
+    <View style={[ban.box, { backgroundColor: colors.warning + '22', borderColor: colors.warning }]}>
+      <Ionicons name="warning-outline" size={16} color={colors.warning} />
+      <Text style={[ban.text, { color: colors.warning }]}>
+        {error === 'INVALID_KEY' ? 'Chave de API inválida — verifique em Ao Vivo > Config API' : 'Erro ao carregar jogos reais. Exibindo sugestões exemplo.'}
+      </Text>
+    </View>
+  );
+}
+const ban = StyleSheet.create({
+  box: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, borderRadius: 10, borderWidth: 1, padding: 10 },
+  text: { fontSize: 12, flex: 1, lineHeight: 16 },
+});
+
 export default function SuggestionsScreen() {
   const { colors } = useTheme();
-  const { sugestoes, registrarAposta, banca } = useApp();
+  const { sugestoes, sugestoesLoading, sugestoesError, reloadSugestoes, registrarAposta, banca } = useApp();
   const [sportFilter, setSportFilter] = useState('Todos');
   const [selected, setSelected] = useState(null);
   const [valor, setValor] = useState('');
   const [odd, setOdd] = useState('');
-  const [resultado, setResultado] = useState(null); // 'win' | 'loss' | null
+  const [resultado, setResultado] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [showManual, setShowManual] = useState(false);
-  // Manual fields
   const [mTime1, setMTime1] = useState('');
   const [mTime2, setMTime2] = useState('');
   const [mTipo, setMTipo] = useState('');
@@ -47,12 +62,11 @@ export default function SuggestionsScreen() {
   const [mEsporte, setMEsporte] = useState('futebol');
 
   const filtered = sportFilter === 'Todos' ? sugestoes : sugestoes.filter(s => s.esporte === sportFilter);
+  const isApiData = sugestoesError !== 'NO_KEY' && !sugestoesError;
 
   function openModal(sug) {
     setSelected(sug);
-    setValor('');
-    setOdd('');
-    setResultado(null);
+    setValor(''); setOdd(''); setResultado(null);
     setShowModal(true);
   }
 
@@ -69,7 +83,7 @@ export default function SuggestionsScreen() {
       esporte: selected.esporte, origem: 'sugestao',
     });
     setShowModal(false);
-    Alert.alert('✅ Registrado!', resultado === 'win' ? `Parabéns! +${formatBRL(v * (o - 1))}` : `Aposta registrada.`);
+    Alert.alert('Registrado!', resultado === 'win' ? `+${formatBRL(v * (o - 1))}` : 'Aposta registrada.');
   }
 
   async function confirmManual() {
@@ -83,18 +97,41 @@ export default function SuggestionsScreen() {
     await registrarAposta({ time1: mTime1, time2: mTime2, tipo: mTipo, valor: v, odd: o, resultado: mResultado, esporte: mEsporte, origem: 'manual' });
     setShowManual(false);
     setMTime1(''); setMTime2(''); setMTipo(''); setMValor(''); setMOdd(''); setMResultado(null);
-    Alert.alert('✅ Registrado!', 'Aposta manual adicionada.');
+    Alert.alert('Registrado!', 'Aposta manual adicionada.');
   }
 
   return (
     <SafeAreaView style={[s.safe, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={s.header}>
-        <Text style={[s.title, { color: colors.text }]}>Sugestões</Text>
+        <View>
+          <Text style={[s.title, { color: colors.text }]}>Sugestões</Text>
+          {isApiData && !sugestoesLoading && (
+            <Text style={[s.subtitle, { color: colors.success }]}>
+              {filtered.length} jogos reais · próximos 3 dias
+            </Text>
+          )}
+          {sugestoesError === 'NO_KEY' && (
+            <Text style={[s.subtitle, { color: colors.textSecondary }]}>
+              Configure a API para jogos reais
+            </Text>
+          )}
+        </View>
         <TouchableOpacity style={[s.manualBtn, { backgroundColor: colors.primary }]} onPress={() => setShowManual(true)}>
           <Ionicons name="add" size={16} color="#fff" />
           <Text style={s.manualBtnText}>Manual</Text>
         </TouchableOpacity>
       </View>
+
+      {/* API key missing banner */}
+      {sugestoesError === 'NO_KEY' && (
+        <View style={[ban.box, { backgroundColor: colors.primary + '15', borderColor: colors.primary, marginHorizontal: 16, marginBottom: 8 }]}>
+          <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+          <Text style={[ban.text, { color: colors.primary }]}>
+            Aba "Ao Vivo" → "Config API" → insira sua chave gratuita do football-data.org para ver jogos reais agendados aqui.
+          </Text>
+        </View>
+      )}
+      <ApiKeyBanner error={sugestoesError} colors={colors} />
 
       {/* Sport filter */}
       <View style={s.filterRow}>
@@ -109,17 +146,39 @@ export default function SuggestionsScreen() {
             </Text>
           </TouchableOpacity>
         ))}
+        {sugestoesLoading && <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 8 }} />}
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.list}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.list}
+        refreshControl={<RefreshControl refreshing={sugestoesLoading} onRefresh={reloadSugestoes} tintColor={colors.primary} />}
+      >
+        {filtered.length === 0 && !sugestoesLoading && (
+          <View style={s.empty}>
+            <Text style={{ fontSize: 44 }}>🗓️</Text>
+            <Text style={[s.emptyText, { color: colors.textSecondary }]}>Nenhum jogo agendado encontrado</Text>
+            <TouchableOpacity onPress={reloadSugestoes} style={[s.retryBtn, { borderColor: colors.primary }]}>
+              <Text style={{ color: colors.primary, fontWeight: '700' }}>Recarregar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {filtered.map(sug => (
           <View key={sug.id} style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={s.cardTop}>
               <Text style={{ fontSize: 20 }}>{sug.esporte === 'basquete' ? '🏀' : '⚽'}</Text>
               <View style={{ flex: 1, marginLeft: 8 }}>
                 <Text style={[s.liga, { color: colors.textSecondary }]}>{sug.liga}</Text>
-                <Text style={[s.jogoLabel, { color: colors.textSecondary }]}>{getJogoLabel(sug.daysAhead, sug.hour)}</Text>
+                <Text style={[s.jogoLabel, { color: isApiData ? colors.primary : colors.textSecondary, fontWeight: isApiData ? '700' : '400' }]}>
+                  {getJogoLabel(sug.daysAhead, sug.hour)}
+                </Text>
               </View>
+              {isApiData && (
+                <View style={[s.realBadge, { backgroundColor: colors.success + '22' }]}>
+                  <Text style={[s.realBadgeText, { color: colors.success }]}>REAL</Text>
+                </View>
+              )}
             </View>
 
             <Text style={[s.teams, { color: colors.text }]}>{sug.time1} vs {sug.time2}</Text>
@@ -152,21 +211,31 @@ export default function SuggestionsScreen() {
             </View>
             {selected && (
               <>
-                <Text style={[s.modalSub, { color: colors.textSecondary }]}>{selected.time1} vs {selected.time2}</Text>
+                <Text style={[s.modalSub, { color: colors.textSecondary }]}>
+                  {selected.time1} vs {selected.time2}
+                </Text>
                 <View style={[s.tipoBadge, { backgroundColor: colors.primary + '22', marginBottom: 16 }]}>
                   <Text style={[s.tipoText, { color: colors.primary }]}>{selected.tipo}</Text>
                 </View>
 
                 <Text style={[s.inputLabel, { color: colors.textSecondary }]}>Valor Apostado (R$)</Text>
-                <TextInput style={[s.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]} value={valor} onChangeText={setValor} keyboardType="decimal-pad" placeholder="Ex: 50.00" placeholderTextColor={colors.textSecondary} />
+                <TextInput
+                  style={[s.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                  value={valor} onChangeText={setValor} keyboardType="decimal-pad"
+                  placeholder="Ex: 50.00" placeholderTextColor={colors.textSecondary}
+                />
 
                 <Text style={[s.inputLabel, { color: colors.textSecondary }]}>Odd da Casa</Text>
-                <TextInput style={[s.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]} value={odd} onChangeText={setOdd} keyboardType="decimal-pad" placeholder="Ex: 1.85" placeholderTextColor={colors.textSecondary} />
+                <TextInput
+                  style={[s.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                  value={odd} onChangeText={setOdd} keyboardType="decimal-pad"
+                  placeholder="Ex: 1.85" placeholderTextColor={colors.textSecondary}
+                />
 
                 {valor && odd && parseFloat(odd) > 1 && (
                   <View style={[s.calcRow, { backgroundColor: colors.success + '11' }]}>
                     <Text style={[s.calcText, { color: colors.success }]}>
-                      Retorno potencial: +{formatBRL(parseFloat(valor.replace(',','.') || 0) * (parseFloat(odd.replace(',','.') || 1) - 1))}
+                      Retorno potencial: +{formatBRL(parseFloat(valor.replace(',', '.') || 0) * (parseFloat(odd.replace(',', '.') || 1) - 1))}
                     </Text>
                   </View>
                 )}
@@ -255,16 +324,22 @@ const s = StyleSheet.create({
   safe: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   title: { fontSize: 22, fontWeight: '800' },
+  subtitle: { fontSize: 12, marginTop: 2 },
   manualBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   manualBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  filterRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 8 },
+  filterRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 8, alignItems: 'center' },
   filterChip: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 7 },
   filterText: { fontSize: 13, fontWeight: '600' },
   list: { paddingHorizontal: 16, paddingTop: 4 },
+  empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
+  emptyText: { fontSize: 14 },
+  retryBtn: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10, marginTop: 4 },
   card: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 },
   cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   liga: { fontSize: 12, fontWeight: '600' },
   jogoLabel: { fontSize: 11, marginTop: 1 },
+  realBadge: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  realBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   teams: { fontSize: 17, fontWeight: '800', marginBottom: 10 },
   tipoBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start' },
   tipoText: { fontSize: 13, fontWeight: '700' },
