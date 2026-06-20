@@ -2,7 +2,36 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const ANTHROPIC_KEY_STORAGE = '@betmanager_anthropic_key'; // reused as generic AI key storage
 
-const GEMINI_MODEL = 'gemini-1.5-flash';
+// Models to try in order — first that works is used
+const GEMINI_MODELS = [
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash-latest',
+  'gemini-1.5-flash',
+  'gemini-pro',
+];
+
+async function callGemini(apiKey, prompt) {
+  for (const model of GEMINI_MODELS) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 600 },
+      }),
+    });
+
+    if (res.status === 400 || res.status === 403) throw new Error('INVALID_AI_KEY');
+    if (res.status === 404) continue; // try next model
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`AI_ERROR_${res.status}: ${body.slice(0, 100)}`);
+    }
+    return res;
+  }
+  throw new Error('AI_ERROR_404: nenhum modelo disponível');
+}
 
 export async function analyzeMatch(match) {
   const apiKey = await AsyncStorage.getItem(ANTHROPIC_KEY_STORAGE);
@@ -32,20 +61,7 @@ Responda SOMENTE com JSON válido, sem texto antes ou depois:
   ]
 }`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 600 },
-    }),
-  });
-
-  if (res.status === 400) throw new Error('INVALID_AI_KEY');
-  if (res.status === 403) throw new Error('INVALID_AI_KEY');
-  if (!res.ok) throw new Error(`AI_ERROR_${res.status}`);
+  const res = await callGemini(apiKey, prompt);
 
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
