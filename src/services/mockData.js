@@ -16,7 +16,9 @@ function makeCasas(base) {
   ];
 }
 
-export const mockSugestoes = [
+// Exported as a function so horario is recomputed fresh every call
+export function getSugestoes() {
+  return [
   // 1X2
   { id: 's1',  time1: 'Manchester City', time2: 'Arsenal',        esporte: 'futebol',  liga: 'Premier League',   odd: 2.10, tipo: '1',        confianca: 78, risco: 'baixo', casas: makeCasas(2.10), horario: hoursFromNow(2)  },
   { id: 's2',  time1: 'Real Madrid',     time2: 'Barcelona',      esporte: 'futebol',  liga: 'La Liga',          odd: 2.45, tipo: 'X',        confianca: 62, risco: 'medio', casas: makeCasas(2.45), horario: hoursFromNow(3)  },
@@ -54,7 +56,8 @@ export const mockSugestoes = [
   { id: 's10', time1: 'Nadal',           time2: 'Medvedev',       esporte: 'tenis',    liga: 'Roland Garros',    odd: 1.55, tipo: '1',        confianca: 88, risco: 'baixo', casas: makeCasas(1.55), horario: hoursFromNow(1)  },
   { id: 's13', time1: 'Sinner',          time2: 'Fritz',          esporte: 'tenis',    liga: 'Wimbledon',        odd: 1.60, tipo: '1',        confianca: 85, risco: 'baixo', casas: makeCasas(1.60), horario: hoursFromNow(44) },
   { id: 's15', time1: 'Sinner',          time2: 'Zverev',         esporte: 'tenis',    liga: 'US Open',          odd: 1.80, tipo: '1',        confianca: 74, risco: 'medio', casas: makeCasas(1.80), horario: hoursFromNow(29) },
-];
+  ];
+}
 
 export const mockLiveGames = [
   { id: 'l1', time1: 'Fluminense', time2: 'Grêmio', esporte: 'futebol', liga: 'Brasileirão', placar: '1-0', minuto: 67, oddCasa: 1.55, oddEmpate: 3.80, oddFora: 6.50, movimentoCasa: +0.12, movimentoEmpate: -0.20, movimentoFora: +1.10 },
@@ -106,7 +109,8 @@ export const mockHistorico = [
   { id: 'h32', time1: 'Sinner', time2: 'Nadal', liga: 'Roland Garros', esporte: 'tenis', odd: 2.10, stake: 100, resultado: 'pending', lucro: 0, data: daysAgo(0) },
 ];
 
-export const mockArbitragem = [
+export function getArbitragem() {
+  return [
   {
     id: 'a1',
     time1: 'Corinthians', time2: 'Fluminense', liga: 'Brasileirão',
@@ -141,7 +145,8 @@ export const mockArbitragem = [
     ],
     totalStake: 964, lucroValor: 17.4,
   },
-];
+  ];
+}
 
 export const mockBanca = {
   saldo: 5230.50,

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { initDatabase, getBanca, getApostas, updateBanca as dbUpdateBanca, addAposta as dbAddAposta, updateAposta as dbUpdateAposta } from '../services/database';
-import { mockSugestoes, mockLiveGames, mockArbitragem } from '../services/mockData';
+import { getSugestoes, mockLiveGames, getArbitragem } from '../services/mockData';
 import { getLiveGames } from '../services/liveService';
 
 const AppContext = createContext(null);
@@ -12,11 +12,11 @@ export function AppProvider({ children }) {
     nivelRisco: 'moderado', stopLossD: 5, stopLossW: 15,
   });
   const [apostas, setApostas] = useState([]);
-  const [sugestoes] = useState(mockSugestoes);
+  const [sugestoes, setSugestoes] = useState(() => getSugestoes());
   const [liveGames, setLiveGames] = useState([]);
-  const [liveHasKey, setLiveHasKey] = useState(null); // null = loading, false = no key, true = has key
+  const [liveHasKey, setLiveHasKey] = useState(null);
   const [liveError, setLiveError] = useState(null);
-  const [arbitragem] = useState(mockArbitragem);
+  const [arbitragem, setArbitragem] = useState(() => getArbitragem());
   const refreshTimerRef = useRef(null);
 
   const loadData = useCallback(async () => {
@@ -97,6 +97,8 @@ export function AppProvider({ children }) {
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setSugestoes(getSugestoes());
+    setArbitragem(getArbitragem());
     await loadData();
     await fetchLive();
   }, [loadData, fetchLive]);
