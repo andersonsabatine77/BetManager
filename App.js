@@ -6,7 +6,35 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <ScrollView style={{ flex: 1, backgroundColor: '#0f0f1a', padding: 24 }}>
+          <Text style={{ color: '#ff6584', fontSize: 18, fontWeight: 'bold', marginTop: 60 }}>
+            ❌ Erro na inicialização
+          </Text>
+          <Text style={{ color: '#f9fafb', fontSize: 13, marginTop: 16, fontFamily: 'monospace' }}>
+            {this.state.error?.toString()}
+          </Text>
+          <Text style={{ color: '#9ca3af', fontSize: 11, marginTop: 16 }}>
+            {this.state.error?.stack}
+          </Text>
+        </ScrollView>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AppProvider, useApp } from './src/context/AppContext';
@@ -96,17 +124,19 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <ThemeProvider>
-          <AppProvider>
-            <NavigationContainer>
-              <AppNavigator />
-            </NavigationContainer>
-          </AppProvider>
-        </ThemeProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <ThemeProvider>
+            <AppProvider>
+              <NavigationContainer>
+                <AppNavigator />
+              </NavigationContainer>
+            </AppProvider>
+          </ThemeProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
 

@@ -6,10 +6,11 @@
  * Format currency as BRL
  */
 export function formatBRL(value) {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
+  const num = Number(value) || 0;
+  const abs = Math.abs(num).toFixed(2);
+  const [intPart, decPart] = abs.split('.');
+  const formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${num < 0 ? '-' : ''}R$ ${formatted},${decPart}`;
 }
 
 /**
