@@ -1,5 +1,11 @@
 export const CASAS = ['Bet365', 'Betfair', 'Pinnacle', '1xBet', 'Betano'];
 
+function hoursFromNow(h) {
+  const d = new Date();
+  d.setHours(d.getHours() + h);
+  return d.toISOString();
+}
+
 function makeCasas(base) {
   return [
     { nome: 'Bet365', odd: base },
@@ -12,42 +18,42 @@ function makeCasas(base) {
 
 export const mockSugestoes = [
   // 1X2
-  { id: 's1', time1: 'Manchester City', time2: 'Arsenal', esporte: 'futebol', liga: 'Premier League', odd: 2.10, tipo: '1', confianca: 78, risco: 'baixo', casas: makeCasas(2.10), horario: '2026-06-21T15:00:00' },
-  { id: 's2', time1: 'Real Madrid', time2: 'Barcelona', esporte: 'futebol', liga: 'La Liga', odd: 2.45, tipo: 'X', confianca: 62, risco: 'medio', casas: makeCasas(2.45), horario: '2026-06-21T16:00:00' },
-  { id: 's3', time1: 'Flamengo', time2: 'Palmeiras', esporte: 'futebol', liga: 'Brasileirão', odd: 1.85, tipo: '1', confianca: 71, risco: 'baixo', casas: makeCasas(1.85), horario: '2026-06-21T18:00:00' },
-  { id: 's4', time1: 'Lakers', time2: 'Celtics', esporte: 'basquete', liga: 'NBA', odd: 1.75, tipo: '1', confianca: 83, risco: 'baixo', casas: makeCasas(1.75), horario: '2026-06-21T21:00:00' },
-  { id: 's5', time1: 'Djokovic', time2: 'Alcaraz', esporte: 'tenis', liga: 'Wimbledon', odd: 2.20, tipo: '2', confianca: 58, risco: 'medio', casas: makeCasas(2.20), horario: '2026-06-21T14:00:00' },
-  { id: 's8', time1: 'Corinthians', time2: 'São Paulo', esporte: 'futebol', liga: 'Brasileirão', odd: 3.10, tipo: '2', confianca: 55, risco: 'alto', casas: makeCasas(3.10), horario: '2026-06-21T20:00:00' },
-  { id: 's11', time1: 'Bayern Munich', time2: 'Dortmund', esporte: 'futebol', liga: 'Bundesliga', odd: 1.70, tipo: '1', confianca: 82, risco: 'baixo', casas: makeCasas(1.70), horario: '2026-06-22T15:30:00' },
-  { id: 's12', time1: 'PSG', time2: 'Lyon', esporte: 'futebol', liga: 'Ligue 1', odd: 1.45, tipo: '1', confianca: 91, risco: 'baixo', casas: makeCasas(1.45), horario: '2026-06-22T17:00:00' },
-  { id: 's14', time1: 'Santos', time2: 'Botafogo', esporte: 'futebol', liga: 'Brasileirão', odd: 2.30, tipo: 'X', confianca: 60, risco: 'medio', casas: makeCasas(2.30), horario: '2026-06-22T16:00:00' },
+  { id: 's1',  time1: 'Manchester City', time2: 'Arsenal',        esporte: 'futebol',  liga: 'Premier League',   odd: 2.10, tipo: '1',        confianca: 78, risco: 'baixo', casas: makeCasas(2.10), horario: hoursFromNow(2)  },
+  { id: 's2',  time1: 'Real Madrid',     time2: 'Barcelona',      esporte: 'futebol',  liga: 'La Liga',          odd: 2.45, tipo: 'X',        confianca: 62, risco: 'medio', casas: makeCasas(2.45), horario: hoursFromNow(3)  },
+  { id: 's3',  time1: 'Flamengo',        time2: 'Palmeiras',      esporte: 'futebol',  liga: 'Brasileirão',      odd: 1.85, tipo: '1',        confianca: 71, risco: 'baixo', casas: makeCasas(1.85), horario: hoursFromNow(5)  },
+  { id: 's4',  time1: 'Lakers',          time2: 'Celtics',        esporte: 'basquete', liga: 'NBA',              odd: 1.75, tipo: '1',        confianca: 83, risco: 'baixo', casas: makeCasas(1.75), horario: hoursFromNow(8)  },
+  { id: 's5',  time1: 'Djokovic',        time2: 'Alcaraz',        esporte: 'tenis',    liga: 'Wimbledon',        odd: 2.20, tipo: '2',        confianca: 58, risco: 'medio', casas: makeCasas(2.20), horario: hoursFromNow(1)  },
+  { id: 's8',  time1: 'Corinthians',     time2: 'São Paulo',      esporte: 'futebol',  liga: 'Brasileirão',      odd: 3.10, tipo: '2',        confianca: 55, risco: 'alto',  casas: makeCasas(3.10), horario: hoursFromNow(7)  },
+  { id: 's11', time1: 'Bayern Munich',   time2: 'Dortmund',       esporte: 'futebol',  liga: 'Bundesliga',       odd: 1.70, tipo: '1',        confianca: 82, risco: 'baixo', casas: makeCasas(1.70), horario: hoursFromNow(26) },
+  { id: 's12', time1: 'PSG',             time2: 'Lyon',           esporte: 'futebol',  liga: 'Ligue 1',          odd: 1.45, tipo: '1',        confianca: 91, risco: 'baixo', casas: makeCasas(1.45), horario: hoursFromNow(28) },
+  { id: 's14', time1: 'Santos',          time2: 'Botafogo',       esporte: 'futebol',  liga: 'Brasileirão',      odd: 2.30, tipo: 'X',        confianca: 60, risco: 'medio', casas: makeCasas(2.30), horario: hoursFromNow(27) },
   // Over/Under Gols
-  { id: 's6', time1: 'Liverpool', time2: 'Chelsea', esporte: 'futebol', liga: 'Premier League', odd: 1.45, tipo: 'Over 0.5', confianca: 94, risco: 'baixo', casas: makeCasas(1.45), horario: '2026-06-21T17:00:00' },
-  { id: 's7', time1: 'Atletico Madrid', time2: 'Sevilla', esporte: 'futebol', liga: 'La Liga', odd: 1.65, tipo: 'Under 1.5', confianca: 80, risco: 'baixo', casas: makeCasas(1.65), horario: '2026-06-21T19:00:00' },
-  { id: 's16', time1: 'Fluminense', time2: 'Grêmio', esporte: 'futebol', liga: 'Brasileirão', odd: 1.80, tipo: 'Over 1.5', confianca: 84, risco: 'baixo', casas: makeCasas(1.80), horario: '2026-06-21T20:00:00' },
-  { id: 's17', time1: 'Inter Milan', time2: 'Milan', esporte: 'futebol', liga: 'Serie A', odd: 1.90, tipo: 'Over 2.5', confianca: 76, risco: 'baixo', casas: makeCasas(1.90), horario: '2026-06-21T21:30:00' },
-  { id: 's18', time1: 'Porto', time2: 'Benfica', esporte: 'futebol', liga: 'Primeira Liga', odd: 2.05, tipo: 'Over 3.5', confianca: 58, risco: 'medio', casas: makeCasas(2.05), horario: '2026-06-21T22:00:00' },
-  { id: 's19', time1: 'Juventus', time2: 'Napoli', esporte: 'futebol', liga: 'Serie A', odd: 1.72, tipo: 'Under 2.5', confianca: 79, risco: 'baixo', casas: makeCasas(1.72), horario: '2026-06-22T14:00:00' },
-  { id: 's20', time1: 'Vasco', time2: 'Internacional', esporte: 'futebol', liga: 'Brasileirão', odd: 2.10, tipo: 'Under 3.5', confianca: 65, risco: 'medio', casas: makeCasas(2.10), horario: '2026-06-22T18:00:00' },
+  { id: 's6',  time1: 'Liverpool',       time2: 'Chelsea',        esporte: 'futebol',  liga: 'Premier League',   odd: 1.45, tipo: 'Over 0.5', confianca: 94, risco: 'baixo', casas: makeCasas(1.45), horario: hoursFromNow(4)  },
+  { id: 's7',  time1: 'Atletico Madrid', time2: 'Sevilla',        esporte: 'futebol',  liga: 'La Liga',          odd: 1.65, tipo: 'Under 1.5',confianca: 80, risco: 'baixo', casas: makeCasas(1.65), horario: hoursFromNow(6)  },
+  { id: 's16', time1: 'Fluminense',      time2: 'Grêmio',         esporte: 'futebol',  liga: 'Brasileirão',      odd: 1.80, tipo: 'Over 1.5', confianca: 84, risco: 'baixo', casas: makeCasas(1.80), horario: hoursFromNow(7)  },
+  { id: 's17', time1: 'Inter Milan',     time2: 'Milan',          esporte: 'futebol',  liga: 'Serie A',          odd: 1.90, tipo: 'Over 2.5', confianca: 76, risco: 'baixo', casas: makeCasas(1.90), horario: hoursFromNow(9)  },
+  { id: 's18', time1: 'Porto',           time2: 'Benfica',        esporte: 'futebol',  liga: 'Primeira Liga',    odd: 2.05, tipo: 'Over 3.5', confianca: 58, risco: 'medio', casas: makeCasas(2.05), horario: hoursFromNow(10) },
+  { id: 's19', time1: 'Juventus',        time2: 'Napoli',         esporte: 'futebol',  liga: 'Serie A',          odd: 1.72, tipo: 'Under 2.5',confianca: 79, risco: 'baixo', casas: makeCasas(1.72), horario: hoursFromNow(25) },
+  { id: 's20', time1: 'Vasco',           time2: 'Internacional',  esporte: 'futebol',  liga: 'Brasileirão',      odd: 2.10, tipo: 'Under 3.5',confianca: 65, risco: 'medio', casas: makeCasas(2.10), horario: hoursFromNow(29) },
   // BTTS (Ambas Marcam)
-  { id: 's21', time1: 'Flamengo', time2: 'São Paulo', esporte: 'futebol', liga: 'Brasileirão', odd: 1.78, tipo: 'BTTS Sim', confianca: 81, risco: 'baixo', casas: makeCasas(1.78), horario: '2026-06-21T18:00:00' },
-  { id: 's22', time1: 'Ajax', time2: 'PSV', esporte: 'futebol', liga: 'Eredivisie', odd: 1.55, tipo: 'BTTS Não', confianca: 72, risco: 'baixo', casas: makeCasas(1.55), horario: '2026-06-22T15:00:00' },
-  { id: 's23', time1: 'Man United', time2: 'Tottenham', esporte: 'futebol', liga: 'Premier League', odd: 1.65, tipo: 'BTTS Sim', confianca: 77, risco: 'baixo', casas: makeCasas(1.65), horario: '2026-06-22T17:30:00' },
+  { id: 's21', time1: 'Flamengo',        time2: 'São Paulo',      esporte: 'futebol',  liga: 'Brasileirão',      odd: 1.78, tipo: 'BTTS Sim', confianca: 81, risco: 'baixo', casas: makeCasas(1.78), horario: hoursFromNow(5)  },
+  { id: 's22', time1: 'Ajax',            time2: 'PSV',            esporte: 'futebol',  liga: 'Eredivisie',       odd: 1.55, tipo: 'BTTS Não', confianca: 72, risco: 'baixo', casas: makeCasas(1.55), horario: hoursFromNow(27) },
+  { id: 's23', time1: 'Man United',      time2: 'Tottenham',      esporte: 'futebol',  liga: 'Premier League',   odd: 1.65, tipo: 'BTTS Sim', confianca: 77, risco: 'baixo', casas: makeCasas(1.65), horario: hoursFromNow(30) },
   // Escanteios
-  { id: 's24', time1: 'Bayern Munich', time2: 'PSG', esporte: 'futebol', liga: 'Champions League', odd: 1.85, tipo: 'Esc +8.5', confianca: 74, risco: 'baixo', casas: makeCasas(1.85), horario: '2026-06-22T20:00:00' },
-  { id: 's25', time1: 'Liverpool', time2: 'Arsenal', esporte: 'futebol', liga: 'Premier League', odd: 1.90, tipo: 'Esc +9.5', confianca: 69, risco: 'medio', casas: makeCasas(1.90), horario: '2026-06-22T21:00:00' },
-  { id: 's26', time1: 'Real Madrid', time2: 'Atletico Madrid', esporte: 'futebol', liga: 'La Liga', odd: 2.10, tipo: 'Esc +10.5', confianca: 61, risco: 'medio', casas: makeCasas(2.10), horario: '2026-06-23T16:00:00' },
-  { id: 's27', time1: 'Palmeiras', time2: 'Santos', esporte: 'futebol', liga: 'Brasileirão', odd: 1.95, tipo: 'Esc -9.5', confianca: 66, risco: 'medio', casas: makeCasas(1.95), horario: '2026-06-23T18:00:00' },
+  { id: 's24', time1: 'Bayern Munich',   time2: 'PSG',            esporte: 'futebol',  liga: 'Champions League', odd: 1.85, tipo: 'Esc +8.5', confianca: 74, risco: 'baixo', casas: makeCasas(1.85), horario: hoursFromNow(44) },
+  { id: 's25', time1: 'Liverpool',       time2: 'Arsenal',        esporte: 'futebol',  liga: 'Premier League',   odd: 1.90, tipo: 'Esc +9.5', confianca: 69, risco: 'medio', casas: makeCasas(1.90), horario: hoursFromNow(45) },
+  { id: 's26', time1: 'Real Madrid',     time2: 'Atletico Madrid',esporte: 'futebol',  liga: 'La Liga',          odd: 2.10, tipo: 'Esc +10.5',confianca: 61, risco: 'medio', casas: makeCasas(2.10), horario: hoursFromNow(50) },
+  { id: 's27', time1: 'Palmeiras',       time2: 'Santos',         esporte: 'futebol',  liga: 'Brasileirão',      odd: 1.95, tipo: 'Esc -9.5', confianca: 66, risco: 'medio', casas: makeCasas(1.95), horario: hoursFromNow(53) },
   // Cartões
-  { id: 's28', time1: 'Corinthians', time2: 'Flamengo', esporte: 'futebol', liga: 'Brasileirão', odd: 1.88, tipo: 'Cart +3.5', confianca: 73, risco: 'baixo', casas: makeCasas(1.88), horario: '2026-06-23T20:00:00' },
-  { id: 's29', time1: 'Atletico Madrid', time2: 'Sevilla', esporte: 'futebol', liga: 'La Liga', odd: 2.05, tipo: 'Cart +4.5', confianca: 59, risco: 'medio', casas: makeCasas(2.05), horario: '2026-06-23T21:00:00' },
+  { id: 's28', time1: 'Corinthians',     time2: 'Flamengo',       esporte: 'futebol',  liga: 'Brasileirão',      odd: 1.88, tipo: 'Cart +3.5',confianca: 73, risco: 'baixo', casas: makeCasas(1.88), horario: hoursFromNow(68) },
+  { id: 's29', time1: 'Atletico Madrid', time2: 'Sevilla',        esporte: 'futebol',  liga: 'La Liga',          odd: 2.05, tipo: 'Cart +4.5',confianca: 59, risco: 'medio', casas: makeCasas(2.05), horario: hoursFromNow(69) },
   // Handicap Asiático
-  { id: 's9', time1: 'Warriors', time2: 'Heat', esporte: 'basquete', liga: 'NBA', odd: 1.90, tipo: 'AH -0.5', confianca: 69, risco: 'medio', casas: makeCasas(1.90), horario: '2026-06-21T22:00:00' },
-  { id: 's30', time1: 'Bucks', time2: 'Nets', esporte: 'basquete', liga: 'NBA', odd: 1.75, tipo: 'AH +0.5', confianca: 74, risco: 'baixo', casas: makeCasas(1.75), horario: '2026-06-22T23:00:00' },
+  { id: 's9',  time1: 'Warriors',        time2: 'Heat',           esporte: 'basquete', liga: 'NBA',              odd: 1.90, tipo: 'AH -0.5', confianca: 69, risco: 'medio', casas: makeCasas(1.90), horario: hoursFromNow(9)  },
+  { id: 's30', time1: 'Bucks',           time2: 'Nets',           esporte: 'basquete', liga: 'NBA',              odd: 1.75, tipo: 'AH +0.5', confianca: 74, risco: 'baixo', casas: makeCasas(1.75), horario: hoursFromNow(33) },
   // Tênis
-  { id: 's10', time1: 'Nadal', time2: 'Medvedev', esporte: 'tenis', liga: 'Roland Garros', odd: 1.55, tipo: '1', confianca: 88, risco: 'baixo', casas: makeCasas(1.55), horario: '2026-06-21T13:00:00' },
-  { id: 's13', time1: 'Bucks', time2: 'Nets', esporte: 'basquete', liga: 'NBA', odd: 1.60, tipo: '1', confianca: 85, risco: 'baixo', casas: makeCasas(1.60), horario: '2026-06-22T20:00:00' },
-  { id: 's15', time1: 'Sinner', time2: 'Zverev', esporte: 'tenis', liga: 'US Open', odd: 1.80, tipo: '1', confianca: 74, risco: 'medio', casas: makeCasas(1.80), horario: '2026-06-22T18:00:00' },
+  { id: 's10', time1: 'Nadal',           time2: 'Medvedev',       esporte: 'tenis',    liga: 'Roland Garros',    odd: 1.55, tipo: '1',        confianca: 88, risco: 'baixo', casas: makeCasas(1.55), horario: hoursFromNow(1)  },
+  { id: 's13', time1: 'Sinner',          time2: 'Fritz',          esporte: 'tenis',    liga: 'Wimbledon',        odd: 1.60, tipo: '1',        confianca: 85, risco: 'baixo', casas: makeCasas(1.60), horario: hoursFromNow(44) },
+  { id: 's15', time1: 'Sinner',          time2: 'Zverev',         esporte: 'tenis',    liga: 'US Open',          odd: 1.80, tipo: '1',        confianca: 74, risco: 'medio', casas: makeCasas(1.80), horario: hoursFromNow(29) },
 ];
 
 export const mockLiveGames = [
@@ -103,32 +109,35 @@ export const mockHistorico = [
 export const mockArbitragem = [
   {
     id: 'a1',
-    time1: 'Flamengo', time2: 'Palmeiras', liga: 'Brasileirão',
+    time1: 'Corinthians', time2: 'Fluminense', liga: 'Brasileirão',
+    horario: hoursFromNow(3),
     lucroGarantido: 3.2,
     apostas: [
-      { casa: 'Bet365', tipo: '1', odd: 2.20, stake: 455 },
+      { casa: 'Bet365',  tipo: '1', odd: 2.20, stake: 455 },
       { casa: 'Pinnacle', tipo: '2', odd: 2.90, stake: 345 },
     ],
     totalStake: 800, lucroValor: 25.6,
   },
   {
     id: 'a2',
-    time1: 'Real Madrid', time2: 'Man City', liga: 'Champions League',
+    time1: 'Bayern Munich', time2: 'PSG', liga: 'Champions League',
+    horario: hoursFromNow(26),
     lucroGarantido: 2.1,
     apostas: [
       { casa: 'Betfair', tipo: '1', odd: 3.10, stake: 323 },
-      { casa: '1xBet', tipo: 'X', odd: 4.20, stake: 238 },
+      { casa: '1xBet',  tipo: 'X', odd: 4.20, stake: 238 },
       { casa: 'Betano', tipo: '2', odd: 2.80, stake: 357 },
     ],
     totalStake: 918, lucroValor: 19.3,
   },
   {
     id: 'a3',
-    time1: 'Lakers', time2: 'Warriors', liga: 'NBA',
+    time1: 'Celtics', time2: 'Thunder', liga: 'NBA',
+    horario: hoursFromNow(8),
     lucroGarantido: 1.8,
     apostas: [
       { casa: 'Pinnacle', tipo: '1', odd: 2.05, stake: 488 },
-      { casa: 'Bet365', tipo: '2', odd: 2.10, stake: 476 },
+      { casa: 'Bet365',  tipo: '2', odd: 2.10, stake: 476 },
     ],
     totalStake: 964, lucroValor: 17.4,
   },
