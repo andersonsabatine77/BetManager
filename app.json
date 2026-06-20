@@ -5,7 +5,6 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -23,14 +22,7 @@
       "package": "com.betmanager.pro"
     },
     "plugins": [
-      "expo-sqlite",
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/notification-icon.png",
-          "color": "#6c63ff"
-        }
-      ]
+      "expo-sqlite"
     ],
     "extra": {
       "eas": {
