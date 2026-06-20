@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "BetManager Pro",
+    "slug": "betting-manager",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#1a1a2e"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.betmanager.pro"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a2e"
+      },
+      "package": "com.betmanager.pro"
+    },
+    "plugins": [
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#6c63ff"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6c9b32d0-9b3e-43fa-9bab-9102b945c383"
+      }
+    }
+  }
+}
