@@ -45,10 +45,7 @@ export async function initDatabase() {
        VALUES (1, ?, ?, ?, ?, ?, ?)`,
       [mockBanca.saldo, mockBanca.saldoInicial, mockBanca.percentualDiario, mockBanca.nivelRisco, mockBanca.stopLossD, mockBanca.stopLossW]
     );
-  }
-
-  const apostasCount = await database.getFirstAsync('SELECT COUNT(*) as count FROM apostas');
-  if (apostasCount.count === 0) {
+    // Only seed historico on very first run (no banca row existed)
     for (const aposta of mockHistorico) {
       await database.runAsync(
         `INSERT OR IGNORE INTO apostas (id, time1, time2, liga, esporte, odd, stake, resultado, lucro, data)
@@ -101,6 +98,8 @@ export async function deleteAposta(id) {
 
 export async function clearAllData() {
   const database = await getDb();
-  await database.execAsync('DELETE FROM apostas; DELETE FROM banca;');
-  db = null;
+  await database.execAsync('DELETE FROM apostas;');
+  await database.runAsync(
+    `UPDATE banca SET saldo=1000, saldoInicial=1000, percentualDiario=2.5, nivelRisco='moderado', stopLossD=5, stopLossW=15 WHERE id=1`
+  );
 }
