@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const ANTHROPIC_KEY_STORAGE = '@betmanager_anthropic_key'; // reused as generic AI key storage
 
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-1.5-flash';
 
 export async function analyzeMatch(match) {
   const apiKey = await AsyncStorage.getItem(ANTHROPIC_KEY_STORAGE);

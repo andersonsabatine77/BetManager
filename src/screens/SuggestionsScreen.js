@@ -29,12 +29,25 @@ function ConfidenceBar({ value, colors }) {
   );
 }
 
-function AiSuggestions({ aiData, loading, colors }) {
+function AiSuggestions({ aiData, loading, error, colors }) {
   if (loading) {
     return (
       <View style={[ai.box, { backgroundColor: colors.background, borderColor: colors.border }]}>
         <ActivityIndicator size="small" color={colors.primary} />
         <Text style={[ai.analyzing, { color: colors.textSecondary }]}>Analisando com IA...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[ai.box, { backgroundColor: colors.danger + '11', borderColor: colors.danger + '44' }]}>
+        <Ionicons name="warning-outline" size={14} color={colors.danger} />
+        <Text style={[ai.analyzing, { color: colors.danger }]}>
+          {error === 'INVALID_AI_KEY' ? 'Chave Gemini inválida — verifique em Configurações' :
+           error === 'NO_AI_KEY' ? 'Chave Gemini não configurada' :
+           `Erro IA: ${error}`}
+        </Text>
       </View>
     );
   }
@@ -277,7 +290,7 @@ export default function SuggestionsScreen() {
 
               {/* AI Analysis or basic suggestion */}
               {hasAiKey ? (
-                <AiSuggestions aiData={aiData} loading={!!aiLoading} colors={colors} />
+                <AiSuggestions aiData={aiData} loading={!!aiLoading} error={ai?.error} colors={colors} />
               ) : (
                 <>
                   <View style={[s.tipoBadge, { backgroundColor: colors.primary + '22' }]}>
