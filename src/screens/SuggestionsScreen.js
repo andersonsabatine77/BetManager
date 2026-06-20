@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Modal, TextInput, KeyboardAvoidingView, Platform, Alert,
@@ -6,41 +6,82 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useApp } from '../context/AppContext';
 import { formatBRL, getJogoLabel } from '../utils/formatters';
+import { analyzeMatchesBatch, ANTHROPIC_KEY_STORAGE } from '../services/aiAnalysis';
 
 const SPORTS_FILTER = ['Todos', 'futebol', 'basquete'];
 
 function ConfidenceBar({ value, colors }) {
   const color = value >= 75 ? colors.success : value >= 60 ? colors.warning : colors.danger;
   return (
-    <View style={{ marginTop: 8 }}>
+    <View style={{ marginTop: 6 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-        <Text style={{ color: colors.textSecondary, fontSize: 11 }}>Confiança IA</Text>
-        <Text style={{ color, fontSize: 11, fontWeight: '700' }}>{value}%</Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 10 }}>Confiança IA</Text>
+        <Text style={{ color, fontSize: 10, fontWeight: '700' }}>{value}%</Text>
       </View>
-      <View style={{ height: 6, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' }}>
+      <View style={{ height: 5, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' }}>
         <View style={{ width: `${value}%`, height: '100%', backgroundColor: color, borderRadius: 3 }} />
       </View>
     </View>
   );
 }
 
-function ApiKeyBanner({ error, colors, onNavigate }) {
-  if (!error || error === 'NO_KEY') return null;
+function AiSuggestions({ aiData, loading, colors }) {
+  if (loading) {
+    return (
+      <View style={[ai.box, { backgroundColor: colors.background, borderColor: colors.border }]}>
+        <ActivityIndicator size="small" color={colors.primary} />
+        <Text style={[ai.analyzing, { color: colors.textSecondary }]}>Analisando com IA...</Text>
+      </View>
+    );
+  }
+
+  if (!aiData || aiData.length === 0) return null;
+
   return (
-    <View style={[ban.box, { backgroundColor: colors.warning + '22', borderColor: colors.warning }]}>
-      <Ionicons name="warning-outline" size={16} color={colors.warning} />
-      <Text style={[ban.text, { color: colors.warning }]}>
-        {error === 'INVALID_KEY' ? 'Chave de API inválida — verifique em Ao Vivo > Config API' : 'Erro ao carregar jogos reais. Exibindo sugestões exemplo.'}
-      </Text>
+    <View style={[ai.container, { borderTopColor: colors.border }]}>
+      <View style={ai.titleRow}>
+        <Text style={{ fontSize: 14 }}>🤖</Text>
+        <Text style={[ai.title, { color: colors.primary }]}>Análise IA — Top 3 Entradas</Text>
+      </View>
+      {aiData.map((sug, i) => {
+        const confColor = sug.confianca >= 75 ? colors.success : sug.confianca >= 60 ? colors.warning : colors.danger;
+        return (
+          <View key={i} style={[ai.item, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={ai.itemTop}>
+              <View style={[ai.rank, { backgroundColor: colors.primary }]}>
+                <Text style={ai.rankText}>{i + 1}</Text>
+              </View>
+              <Text style={[ai.tipo, { color: colors.text }]} numberOfLines={2}>{sug.tipo}</Text>
+              <View style={[ai.conf, { backgroundColor: confColor + '22' }]}>
+                <Text style={[ai.confText, { color: confColor }]}>{sug.confianca}%</Text>
+              </View>
+            </View>
+            <Text style={[ai.razao, { color: colors.textSecondary }]}>{sug.razao}</Text>
+          </View>
+        );
+      })}
     </View>
   );
 }
-const ban = StyleSheet.create({
-  box: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, borderRadius: 10, borderWidth: 1, padding: 10 },
-  text: { fontSize: 12, flex: 1, lineHeight: 16 },
+
+const ai = StyleSheet.create({
+  box: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 10, borderWidth: 1, padding: 12, marginTop: 12 },
+  analyzing: { fontSize: 13 },
+  container: { marginTop: 12, borderTopWidth: 1, paddingTop: 12 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  title: { fontSize: 13, fontWeight: '800' },
+  item: { borderRadius: 10, borderWidth: 1, padding: 10, marginBottom: 6 },
+  itemTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  rank: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  rankText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  tipo: { fontSize: 13, fontWeight: '700', flex: 1 },
+  conf: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  confText: { fontSize: 11, fontWeight: '700' },
+  razao: { fontSize: 11, marginLeft: 28, lineHeight: 15 },
 });
 
 export default function SuggestionsScreen() {
@@ -52,6 +93,7 @@ export default function SuggestionsScreen() {
   const [odd, setOdd] = useState('');
   const [resultado, setResultado] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [selectedTipo, setSelectedTipo] = useState('');
   const [showManual, setShowManual] = useState(false);
   const [mTime1, setMTime1] = useState('');
   const [mTime2, setMTime2] = useState('');
@@ -61,11 +103,48 @@ export default function SuggestionsScreen() {
   const [mResultado, setMResultado] = useState(null);
   const [mEsporte, setMEsporte] = useState('futebol');
 
+  // AI analysis state: { [matchId]: { data: [...] | null, loading: bool, error: string|null } }
+  const [aiResults, setAiResults] = useState({});
+  const [hasAiKey, setHasAiKey] = useState(false);
+  const analysisRunning = useRef(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(ANTHROPIC_KEY_STORAGE).then(k => setHasAiKey(!!k));
+  }, []);
+
+  // Trigger AI analysis when suggestions load
+  useEffect(() => {
+    if (!sugestoes || sugestoes.length === 0 || analysisRunning.current) return;
+    AsyncStorage.getItem(ANTHROPIC_KEY_STORAGE).then(key => {
+      if (!key) return;
+      setHasAiKey(true);
+      const toAnalyze = sugestoes.filter(s => s.esporte === 'futebol').slice(0, 12);
+      if (toAnalyze.length === 0) return;
+
+      // Mark all as loading
+      const initial = {};
+      toAnalyze.forEach(s => { initial[s.id] = { data: null, loading: true, error: null }; });
+      setAiResults(initial);
+
+      analysisRunning.current = true;
+      analyzeMatchesBatch(
+        toAnalyze,
+        (id, result) => {
+          setAiResults(prev => ({ ...prev, [id]: { data: result.data, loading: false, error: result.error } }));
+        },
+        2 // 2 concurrent requests
+      ).finally(() => {
+        analysisRunning.current = false;
+      });
+    });
+  }, [sugestoes]);
+
   const filtered = sportFilter === 'Todos' ? sugestoes : sugestoes.filter(s => s.esporte === sportFilter);
   const isApiData = sugestoesError !== 'NO_KEY' && !sugestoesError;
 
-  function openModal(sug) {
+  function openModal(sug, tipoOverride) {
     setSelected(sug);
+    setSelectedTipo(tipoOverride || sug.tipo);
     setValor(''); setOdd(''); setResultado(null);
     setShowModal(true);
   }
@@ -79,7 +158,7 @@ export default function SuggestionsScreen() {
     if (v > banca.saldoAtual) return Alert.alert('Atenção', 'Valor supera seu saldo atual.');
     await registrarAposta({
       time1: selected.time1, time2: selected.time2,
-      tipo: selected.tipo, valor: v, odd: o, resultado,
+      tipo: selectedTipo, valor: v, odd: o, resultado,
       esporte: selected.esporte, origem: 'sugestao',
     });
     setShowModal(false);
@@ -111,9 +190,7 @@ export default function SuggestionsScreen() {
             </Text>
           )}
           {sugestoesError === 'NO_KEY' && (
-            <Text style={[s.subtitle, { color: colors.textSecondary }]}>
-              Configure a API para jogos reais
-            </Text>
+            <Text style={[s.subtitle, { color: colors.textSecondary }]}>Configure a API para jogos reais</Text>
           )}
         </View>
         <TouchableOpacity style={[s.manualBtn, { backgroundColor: colors.primary }]} onPress={() => setShowManual(true)}>
@@ -122,16 +199,23 @@ export default function SuggestionsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* API key missing banner */}
+      {/* Banners */}
       {sugestoesError === 'NO_KEY' && (
-        <View style={[ban.box, { backgroundColor: colors.primary + '15', borderColor: colors.primary, marginHorizontal: 16, marginBottom: 8 }]}>
-          <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
-          <Text style={[ban.text, { color: colors.primary }]}>
-            Aba "Ao Vivo" → "Config API" → insira sua chave gratuita do football-data.org para ver jogos reais agendados aqui.
+        <View style={[s.banner, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]}>
+          <Ionicons name="information-circle-outline" size={15} color={colors.primary} />
+          <Text style={[s.bannerText, { color: colors.primary }]}>
+            Aba "Ao Vivo" → "Config API" para ver jogos reais agendados aqui.
           </Text>
         </View>
       )}
-      <ApiKeyBanner error={sugestoesError} colors={colors} />
+      {isApiData && !hasAiKey && (
+        <View style={[s.banner, { backgroundColor: colors.warning + '18', borderColor: colors.warning }]}>
+          <Text style={{ fontSize: 13 }}>🤖</Text>
+          <Text style={[s.bannerText, { color: colors.warning }]}>
+            Adicione a chave Claude em Configurações para análise IA por jogo.
+          </Text>
+        </View>
+      )}
 
       {/* Sport filter */}
       <View style={s.filterRow}>
@@ -157,45 +241,64 @@ export default function SuggestionsScreen() {
         {filtered.length === 0 && !sugestoesLoading && (
           <View style={s.empty}>
             <Text style={{ fontSize: 44 }}>🗓️</Text>
-            <Text style={[s.emptyText, { color: colors.textSecondary }]}>Nenhum jogo agendado encontrado</Text>
+            <Text style={[s.emptyText, { color: colors.textSecondary }]}>Nenhum jogo encontrado</Text>
             <TouchableOpacity onPress={reloadSugestoes} style={[s.retryBtn, { borderColor: colors.primary }]}>
               <Text style={{ color: colors.primary, fontWeight: '700' }}>Recarregar</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {filtered.map(sug => (
-          <View key={sug.id} style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={s.cardTop}>
-              <Text style={{ fontSize: 20 }}>{sug.esporte === 'basquete' ? '🏀' : '⚽'}</Text>
-              <View style={{ flex: 1, marginLeft: 8 }}>
-                <Text style={[s.liga, { color: colors.textSecondary }]}>{sug.liga}</Text>
-                <Text style={[s.jogoLabel, { color: isApiData ? colors.primary : colors.textSecondary, fontWeight: isApiData ? '700' : '400' }]}>
-                  {getJogoLabel(sug.daysAhead, sug.hour)}
-                </Text>
-              </View>
-              {isApiData && (
-                <View style={[s.realBadge, { backgroundColor: colors.success + '22' }]}>
-                  <Text style={[s.realBadgeText, { color: colors.success }]}>REAL</Text>
+        {filtered.map(sug => {
+          const ai = aiResults[sug.id];
+          const aiLoading = ai?.loading;
+          const aiData = ai?.data;
+          const topAiTipo = aiData?.[0]?.tipo || sug.tipo;
+
+          return (
+            <View key={sug.id} style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {/* Header */}
+              <View style={s.cardTop}>
+                <Text style={{ fontSize: 18 }}>{sug.esporte === 'basquete' ? '🏀' : '⚽'}</Text>
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={[s.liga, { color: colors.textSecondary }]}>{sug.liga}</Text>
+                  <Text style={[s.jogoLabel, { color: colors.primary, fontWeight: '700' }]}>
+                    {getJogoLabel(sug.daysAhead, sug.hour)}
+                  </Text>
                 </View>
+                {isApiData && (
+                  <View style={[s.realBadge, { backgroundColor: colors.success + '22' }]}>
+                    <Text style={[s.realBadgeText, { color: colors.success }]}>REAL</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Teams */}
+              <Text style={[s.teams, { color: colors.text }]}>{sug.time1} vs {sug.time2}</Text>
+
+              {/* AI Analysis or basic suggestion */}
+              {hasAiKey ? (
+                <AiSuggestions aiData={aiData} loading={!!aiLoading} colors={colors} />
+              ) : (
+                <>
+                  <View style={[s.tipoBadge, { backgroundColor: colors.primary + '22' }]}>
+                    <Ionicons name="bulb-outline" size={13} color={colors.primary} />
+                    <Text style={[s.tipoText, { color: colors.primary }]}>{sug.tipo}</Text>
+                  </View>
+                  <ConfidenceBar value={sug.confianca} colors={colors} />
+                </>
               )}
+
+              {/* Bet button */}
+              <TouchableOpacity
+                style={[s.apostarBtn, { backgroundColor: colors.primary }]}
+                onPress={() => openModal(sug, topAiTipo)}
+              >
+                <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
+                <Text style={s.apostarBtnText}>Registrar Aposta</Text>
+              </TouchableOpacity>
             </View>
-
-            <Text style={[s.teams, { color: colors.text }]}>{sug.time1} vs {sug.time2}</Text>
-
-            <View style={[s.tipoBadge, { backgroundColor: colors.primary + '22' }]}>
-              <Ionicons name="bulb-outline" size={13} color={colors.primary} />
-              <Text style={[s.tipoText, { color: colors.primary }]}>{sug.tipo}</Text>
-            </View>
-
-            <ConfidenceBar value={sug.confianca} colors={colors} />
-
-            <TouchableOpacity style={[s.apostarBtn, { backgroundColor: colors.primary }]} onPress={() => openModal(sug)}>
-              <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
-              <Text style={s.apostarBtnText}>Registrar Aposta</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
+          );
+        })}
         <View style={{ height: 32 }} />
       </ScrollView>
 
@@ -211,30 +314,20 @@ export default function SuggestionsScreen() {
             </View>
             {selected && (
               <>
-                <Text style={[s.modalSub, { color: colors.textSecondary }]}>
-                  {selected.time1} vs {selected.time2}
-                </Text>
+                <Text style={[s.modalSub, { color: colors.textSecondary }]}>{selected.time1} vs {selected.time2}</Text>
                 <View style={[s.tipoBadge, { backgroundColor: colors.primary + '22', marginBottom: 16 }]}>
-                  <Text style={[s.tipoText, { color: colors.primary }]}>{selected.tipo}</Text>
+                  <Text style={[s.tipoText, { color: colors.primary }]}>{selectedTipo}</Text>
                 </View>
 
                 <Text style={[s.inputLabel, { color: colors.textSecondary }]}>Valor Apostado (R$)</Text>
-                <TextInput
-                  style={[s.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                  value={valor} onChangeText={setValor} keyboardType="decimal-pad"
-                  placeholder="Ex: 50.00" placeholderTextColor={colors.textSecondary}
-                />
+                <TextInput style={[s.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]} value={valor} onChangeText={setValor} keyboardType="decimal-pad" placeholder="Ex: 50.00" placeholderTextColor={colors.textSecondary} />
 
                 <Text style={[s.inputLabel, { color: colors.textSecondary }]}>Odd da Casa</Text>
-                <TextInput
-                  style={[s.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                  value={odd} onChangeText={setOdd} keyboardType="decimal-pad"
-                  placeholder="Ex: 1.85" placeholderTextColor={colors.textSecondary}
-                />
+                <TextInput style={[s.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]} value={odd} onChangeText={setOdd} keyboardType="decimal-pad" placeholder="Ex: 1.85" placeholderTextColor={colors.textSecondary} />
 
                 {valor && odd && parseFloat(odd) > 1 && (
                   <View style={[s.calcRow, { backgroundColor: colors.success + '11' }]}>
-                    <Text style={[s.calcText, { color: colors.success }]}>
+                    <Text style={{ color: colors.success, fontSize: 13, fontWeight: '700' }}>
                       Retorno potencial: +{formatBRL(parseFloat(valor.replace(',', '.') || 0) * (parseFloat(odd.replace(',', '.') || 1) - 1))}
                     </Text>
                   </View>
@@ -243,11 +336,7 @@ export default function SuggestionsScreen() {
                 <Text style={[s.inputLabel, { color: colors.textSecondary }]}>Resultado</Text>
                 <View style={s.resultRow}>
                   {[{ v: 'win', label: '✅ Vencedora', color: colors.success }, { v: 'loss', label: '❌ Perdedora', color: colors.danger }].map(r => (
-                    <TouchableOpacity
-                      key={r.v}
-                      style={[s.resultBtn, { borderColor: resultado === r.v ? r.color : colors.border }, resultado === r.v && { backgroundColor: r.color + '22' }]}
-                      onPress={() => setResultado(r.v)}
-                    >
+                    <TouchableOpacity key={r.v} style={[s.resultBtn, { borderColor: resultado === r.v ? r.color : colors.border }, resultado === r.v && { backgroundColor: r.color + '22' }]} onPress={() => setResultado(r.v)}>
                       <Text style={[s.resultBtnText, { color: resultado === r.v ? r.color : colors.textSecondary }]}>{r.label}</Text>
                     </TouchableOpacity>
                   ))}
@@ -272,7 +361,6 @@ export default function SuggestionsScreen() {
                 <Ionicons name="close" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
-
             {[
               { label: 'Time A / Equipe A', value: mTime1, set: setMTime1 },
               { label: 'Time B / Equipe B', value: mTime2, set: setMTime2 },
@@ -282,16 +370,9 @@ export default function SuggestionsScreen() {
             ].map(f => (
               <View key={f.label}>
                 <Text style={[s.inputLabel, { color: colors.textSecondary }]}>{f.label}</Text>
-                <TextInput
-                  style={[s.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                  value={f.value} onChangeText={f.set}
-                  keyboardType={f.keyboard || 'default'}
-                  placeholder={f.placeholder || f.label}
-                  placeholderTextColor={colors.textSecondary}
-                />
+                <TextInput style={[s.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]} value={f.value} onChangeText={f.set} keyboardType={f.keyboard || 'default'} placeholder={f.placeholder || f.label} placeholderTextColor={colors.textSecondary} />
               </View>
             ))}
-
             <Text style={[s.inputLabel, { color: colors.textSecondary }]}>Esporte</Text>
             <View style={s.resultRow}>
               {['futebol', 'basquete'].map(e => (
@@ -300,7 +381,6 @@ export default function SuggestionsScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-
             <Text style={[s.inputLabel, { color: colors.textSecondary }]}>Resultado</Text>
             <View style={s.resultRow}>
               {[{ v: 'win', label: '✅ Vencedora', color: colors.success }, { v: 'loss', label: '❌ Perdedora', color: colors.danger }].map(r => (
@@ -309,7 +389,6 @@ export default function SuggestionsScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-
             <TouchableOpacity style={[s.confirmBtn, { backgroundColor: colors.primary, marginBottom: 32 }]} onPress={confirmManual}>
               <Text style={s.confirmBtnText}>Adicionar Aposta</Text>
             </TouchableOpacity>
@@ -327,23 +406,25 @@ const s = StyleSheet.create({
   subtitle: { fontSize: 12, marginTop: 2 },
   manualBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   manualBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 6, borderRadius: 10, borderWidth: 1, padding: 10 },
+  bannerText: { fontSize: 12, flex: 1, lineHeight: 16 },
   filterRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 8, alignItems: 'center' },
   filterChip: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 7 },
   filterText: { fontSize: 13, fontWeight: '600' },
   list: { paddingHorizontal: 16, paddingTop: 4 },
   empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyText: { fontSize: 14 },
-  retryBtn: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10, marginTop: 4 },
-  card: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 },
+  retryBtn: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 },
+  card: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 14, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 },
   cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  liga: { fontSize: 12, fontWeight: '600' },
-  jogoLabel: { fontSize: 11, marginTop: 1 },
+  liga: { fontSize: 11, fontWeight: '600' },
+  jogoLabel: { fontSize: 12, marginTop: 1 },
   realBadge: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
   realBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  teams: { fontSize: 17, fontWeight: '800', marginBottom: 10 },
+  teams: { fontSize: 17, fontWeight: '800', marginBottom: 8 },
   tipoBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start' },
   tipoText: { fontSize: 13, fontWeight: '700' },
-  apostarBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, padding: 14, marginTop: 12 },
+  apostarBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, padding: 13, marginTop: 12 },
   apostarBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
   modal: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
@@ -353,7 +434,6 @@ const s = StyleSheet.create({
   inputLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 12 },
   input: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
   calcRow: { borderRadius: 8, padding: 10, marginTop: 8 },
-  calcText: { fontSize: 13, fontWeight: '700' },
   resultRow: { flexDirection: 'row', gap: 10, marginTop: 2 },
   resultBtn: { flex: 1, borderRadius: 10, borderWidth: 1.5, padding: 12, alignItems: 'center' },
   resultBtnText: { fontSize: 13, fontWeight: '700' },
