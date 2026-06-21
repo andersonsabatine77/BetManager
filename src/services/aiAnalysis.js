@@ -40,12 +40,12 @@ export async function analyzeMatchesBatch(matches, onResult) {
     `ID:${m.id}|${m.liga}|${m.time1} vs ${m.time2}`
   ).join('\n');
 
-  const prompt = `Analise estes jogos de futebol e retorne JSON com 3 sugestões de aposta para cada um.
+  const prompt = `Analise estes jogos de futebol. Para cada jogo escolha 3 entradas DIFERENTES entre si — cada uma de uma categoria diferente: uma de GOLS (Over/Under 1.5, 2.5 ou 3.5), uma de ESCANTEIOS (Over/Under 8.5, 9.5 ou 10.5) OU CARTÕES (Over/Under 3.5 ou 4.5), e uma de RESULTADO (1X2, dupla chance, BTTS). Varie as categorias — nunca repita a mesma categoria nas 3 sugestões.
 
 ${lista}
 
 JSON (sem texto fora):
-{"analises":[{"id":"ID","sugestoes":[{"tipo":"Mais de 2.5 Gols","confianca":72,"razao":"razão"},{"tipo":"Ambos Marcam - Sim","confianca":68,"razao":"razão"},{"tipo":"Dupla Chance 1X","confianca":65,"razao":"razão"}]}]}`;
+{"analises":[{"id":"ID","sugestoes":[{"tipo":"Mais de 2.5 Gols","confianca":72,"razao":"razão curta"},{"tipo":"Mais de 9.5 Escanteios","confianca":68,"razao":"razão curta"},{"tipo":"Vitória Mandante","confianca":65,"razao":"razão curta"}]}]}`;
 
   try {
     const res = await callGroq(apiKey, prompt);
