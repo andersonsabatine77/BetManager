@@ -53,27 +53,23 @@ function AiSuggestions({ aiData, loading, error, colors }) {
     );
   }
 
-  if (!aiData || aiData.length === 0) return null;
-
-  const filtered = aiData.filter(s => parseInt(s.confianca, 10) >= 60);
+  const filtered = (aiData || []).filter(s => (parseInt(s.confianca, 10) || 0) >= 60);
+  if (filtered.length === 0) return null;
 
   return (
     <View style={[ai.container, { borderTopColor: colors.border }]}>
       <View style={ai.titleRow}>
         <Text style={{ fontSize: 14 }}>🤖</Text>
-        <Text style={[ai.title, { color: colors.primary }]}>
-          {`Análise IA — ${filtered.length}/${aiData.length} acima de 60%`}
-        </Text>
+        <Text style={[ai.title, { color: colors.primary }]}>Análise IA — Acima de 60%</Text>
       </View>
-      {aiData.map((sug, i) => {
+      {filtered.map((sug, i) => {
         const conf = parseInt(sug.confianca, 10) || 0;
-        const aboveThreshold = conf >= 60;
         const confColor = conf >= 75 ? colors.success : conf >= 60 ? colors.warning : colors.danger;
         return (
-          <View key={i} style={[ai.item, { backgroundColor: colors.background, borderColor: colors.border, opacity: aboveThreshold ? 1 : 0.4 }]}>
+          <View key={i} style={[ai.item, { backgroundColor: colors.background, borderColor: colors.border }]}>
             <View style={ai.itemTop}>
-              <View style={[ai.rank, { backgroundColor: aboveThreshold ? colors.primary : colors.textSecondary }]}>
-                <Text style={ai.rankText}>{conf}%</Text>
+              <View style={[ai.rank, { backgroundColor: colors.primary }]}>
+                <Text style={ai.rankText}>{i + 1}</Text>
               </View>
               <Text style={[ai.tipo, { color: colors.text }]} numberOfLines={2}>{sug.tipo}</Text>
               <View style={[ai.conf, { backgroundColor: confColor + '22' }]}>
