@@ -53,26 +53,31 @@ function AiSuggestions({ aiData, loading, error, colors }) {
     );
   }
 
-  const filtered = (aiData || []).filter(s => parseInt(s.confianca, 10) >= 60);
-  if (filtered.length === 0) return null;
+  if (!aiData || aiData.length === 0) return null;
+
+  const filtered = aiData.filter(s => parseInt(s.confianca, 10) >= 60);
 
   return (
     <View style={[ai.container, { borderTopColor: colors.border }]}>
       <View style={ai.titleRow}>
         <Text style={{ fontSize: 14 }}>🤖</Text>
-        <Text style={[ai.title, { color: colors.primary }]}>Análise IA — Acima de 60%</Text>
+        <Text style={[ai.title, { color: colors.primary }]}>
+          {`Análise IA — ${filtered.length}/${aiData.length} acima de 60%`}
+        </Text>
       </View>
-      {filtered.map((sug, i) => {
-        const confColor = sug.confianca >= 75 ? colors.success : sug.confianca >= 60 ? colors.warning : colors.danger;
+      {aiData.map((sug, i) => {
+        const conf = parseInt(sug.confianca, 10) || 0;
+        const aboveThreshold = conf >= 60;
+        const confColor = conf >= 75 ? colors.success : conf >= 60 ? colors.warning : colors.danger;
         return (
-          <View key={i} style={[ai.item, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <View key={i} style={[ai.item, { backgroundColor: colors.background, borderColor: colors.border, opacity: aboveThreshold ? 1 : 0.4 }]}>
             <View style={ai.itemTop}>
-              <View style={[ai.rank, { backgroundColor: colors.primary }]}>
-                <Text style={ai.rankText}>{i + 1}</Text>
+              <View style={[ai.rank, { backgroundColor: aboveThreshold ? colors.primary : colors.textSecondary }]}>
+                <Text style={ai.rankText}>{conf}%</Text>
               </View>
               <Text style={[ai.tipo, { color: colors.text }]} numberOfLines={2}>{sug.tipo}</Text>
               <View style={[ai.conf, { backgroundColor: confColor + '22' }]}>
-                <Text style={[ai.confText, { color: confColor }]}>{sug.confianca}%</Text>
+                <Text style={[ai.confText, { color: confColor }]}>{conf}%</Text>
               </View>
             </View>
             <Text style={[ai.razao, { color: colors.textSecondary }]}>{sug.razao}</Text>
