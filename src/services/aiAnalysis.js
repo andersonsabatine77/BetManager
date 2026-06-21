@@ -40,22 +40,30 @@ export async function analyzeMatchesBatch(matches, onResult) {
     `ID:${m.id}|${m.liga}|${m.time1} vs ${m.time2}`
   ).join('\n');
 
-  const prompt = `Analise estes jogos de futebol. Para cada jogo, liste APENAS as apostas onde você tem confiança MÍNIMA de 60%. Escolha entre: Over/Under gols (1.5, 2.5, 3.5), BTTS, escanteios (8.5, 9.5, 10.5), cartões (3.5, 4.5), resultado (1X2, dupla chance). Se não tiver 60% de confiança em nada, coloque as mais prováveis com confiança real. Nunca invente confiança alta — seja preciso.
+  const prompt = `You are a sports betting analyst. For each football match below, suggest up to 3 bets with real confidence above 60%. Options: Over/Under goals (1.5,2.5,3.5), BTTS, corners (8.5,9.5,10.5), cards (3.5,4.5), match result (home win, draw, away win, double chance). Be honest about confidence.
 
+Matches:
 ${lista}
 
-JSON (sem texto fora):
-{"analises":[{"id":"ID","sugestoes":[{"tipo":"Mais de 2.5 Gols","confianca":72,"razao":"razão curta"},{"tipo":"Ambos Marcam - Sim","confianca":68,"razao":"razão curta"},{"tipo":"Dupla Chance 1X","confianca":65,"razao":"razão curta"}]}]}`;
+Respond with ONLY a JSON object, no other text:
+{"analises":[{"id":"MATCH_ID","sugestoes":[{"tipo":"Over 2.5 Goals","confianca":72,"razao":"short reason in portuguese"}]}]}`;
 
   try {
     const res = await callGroq(apiKey, prompt);
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content || '';
 
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('PARSE_ERROR');
+    // Extrai o primeiro objeto JSON válido que contenha "analises"
+    const start = text.indexOf('{"analises"');
+    if (start === -1) throw new Error('PARSE_ERROR');
+    let depth = 0, end = -1;
+    for (let i = start; i < text.length; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end === -1) throw new Error('PARSE_ERROR');
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(text.slice(start, end + 1));
     const analises = parsed.analises || [];
 
     limited.forEach(m => {
