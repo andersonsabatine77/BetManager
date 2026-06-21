@@ -2,7 +2,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const ANTHROPIC_KEY_STORAGE = '@betmanager_anthropic_key'; // reused as generic AI key storage
 
-// Models to try in order — first that works is used
 const GEMINI_MODELS = [
   'gemini-2.0-flash-lite',
   'gemini-1.5-flash-latest',
@@ -10,7 +9,7 @@ const GEMINI_MODELS = [
   'gemini-pro',
 ];
 
-async function callGemini(apiKey, prompt) {
+async function callGemini(apiKey, prompt, maxTokens = 2000) {
   for (const model of GEMINI_MODELS) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const res = await fetch(url, {
@@ -18,73 +17,85 @@ async function callGemini(apiKey, prompt) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 600 },
+        generationConfig: { temperature: 0.4, maxOutputTokens: maxTokens },
       }),
     });
-
     if (res.status === 400 || res.status === 403) throw new Error('INVALID_AI_KEY');
-    if (res.status === 404) continue; // try next model
+    if (res.status === 404) continue;
+    if (res.status === 429) throw new Error('QUOTA_429');
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new Error(`AI_ERROR_${res.status}: ${body.slice(0, 100)}`);
+      throw new Error(`AI_ERROR_${res.status}: ${body.slice(0, 80)}`);
     }
     return res;
   }
-  throw new Error('AI_ERROR_404: nenhum modelo disponível');
+  throw new Error('AI_ERROR_404');
 }
 
-export async function analyzeMatch(match) {
+// UMA única chamada com todos os jogos — evita rate limiting
+export async function analyzeMatchesBatch(matches, onResult) {
   const apiKey = await AsyncStorage.getItem(ANTHROPIC_KEY_STORAGE);
-  if (!apiKey) throw new Error('NO_AI_KEY');
+  if (!apiKey) {
+    matches.forEach(m => onResult(m.id, { data: null, error: 'NO_AI_KEY' }));
+    return;
+  }
 
-  const prompt = `Você é um especialista em análise estatística para apostas esportivas. Analise o seguinte jogo:
+  const limited = matches.slice(0, 8);
 
-Competição: ${match.liga}
-Mandante: ${match.time1}
-Visitante: ${match.time2}
+  const lista = limited.map((m, i) =>
+    `${i + 1}. ID:${m.id} | ${m.liga} | Mandante: ${m.time1} | Visitante: ${m.time2}`
+  ).join('\n');
 
-Com base no histórico recente dessas equipes e padrões da ${match.liga}, identifique as 3 MELHORES entradas de aposta. Analise obrigatoriamente:
-- Gols: Over/Under 0.5, 1.5, 2.5, 3.5
-- Ambos Marcam (BTTS): Sim ou Não
-- Escanteios: Mais/Menos de 8.5, 9.5, 10.5
-- Cartões: Mais/Menos de 3.5, 4.5
-- Resultado: Vitória Mandante, Empate, Vitória Visitante, Dupla Chance 1X ou X2
+  const prompt = `Você é um especialista em análise de apostas esportivas. Analise os jogos abaixo e para CADA UM sugira as 3 melhores entradas considerando: gols (Over/Under 0.5/1.5/2.5/3.5), BTTS (ambos marcam), escanteios (8.5/9.5/10.5), cartões (3.5/4.5), resultado (1X2, dupla chance).
 
-Escolha as entradas com MAIOR probabilidade baseada no padrão histórico real das equipes.
+JOGOS:
+${lista}
 
-Responda SOMENTE com JSON válido, sem texto antes ou depois:
+Responda SOMENTE com JSON válido neste formato exato (sem texto antes ou depois):
 {
-  "sugestoes": [
-    {"tipo": "...", "confianca": 75, "razao": "explicação curta em português"},
-    {"tipo": "...", "confianca": 70, "razao": "explicação curta em português"},
-    {"tipo": "...", "confianca": 65, "razao": "explicação curta em português"}
+  "analises": [
+    {
+      "id": "ID_DO_JOGO",
+      "sugestoes": [
+        {"tipo": "Mais de 2.5 Gols", "confianca": 75, "razao": "motivo curto"},
+        {"tipo": "Ambos Marcam - Sim", "confianca": 70, "razao": "motivo curto"},
+        {"tipo": "Vitória Mandante", "confianca": 65, "razao": "motivo curto"}
+      ]
+    }
   ]
 }`;
 
-  const res = await callGemini(apiKey, prompt);
+  try {
+    const res = await callGemini(apiKey, prompt, 3000);
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('PARSE_ERROR');
 
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('PARSE_ERROR');
-  return JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonMatch[0]);
+    const analises = parsed.analises || [];
+
+    // Distribui resultados para cada jogo
+    limited.forEach(m => {
+      const found = analises.find(a => a.id === m.id);
+      if (found?.sugestoes?.length > 0) {
+        onResult(m.id, { data: found.sugestoes, error: null });
+      } else {
+        onResult(m.id, { data: null, error: null }); // sem sugestão mas sem erro
+      }
+    });
+  } catch (e) {
+    const msg = e.message === 'QUOTA_429'
+      ? 'Cota do Gemini atingida — aguarde 1 minuto'
+      : e.message === 'INVALID_AI_KEY'
+      ? 'Chave Gemini inválida'
+      : `Erro IA: ${e.message}`;
+    limited.forEach(m => onResult(m.id, { data: null, error: msg }));
+  }
 }
 
-const delay = (ms) => new Promise(r => setTimeout(r, ms));
-
-// Sequencial com pausa de 2s entre chamadas para respeitar o free tier (15 RPM)
-export async function analyzeMatchesBatch(matches, onResult, _concurrency = 1) {
-  const limited = matches.slice(0, 6); // máximo 6 análises por vez
-  for (let i = 0; i < limited.length; i++) {
-    const match = limited[i];
-    try {
-      const result = await analyzeMatch(match);
-      onResult(match.id, { data: result.sugestoes, error: null });
-    } catch (e) {
-      const msg = e.message.includes('429') ? 'Cota gratuita atingida — tente novamente em 1 minuto' : e.message;
-      onResult(match.id, { data: null, error: msg });
-    }
-    if (i < limited.length - 1) await delay(2000); // 2s entre requisições
-  }
+// Mantido para compatibilidade (não usado mais)
+export async function analyzeMatch(match) {
+  return { sugestoes: [] };
 }
