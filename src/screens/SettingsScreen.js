@@ -8,6 +8,7 @@ import { useApp } from '../context/AppContext';
 import { formatBRL } from '../utils/formatters';
 import { API_KEY_STORAGE } from '../services/suggestionsApi';
 import { ANTHROPIC_KEY_STORAGE } from '../services/aiAnalysis';
+import { SMART_API_KEY_STORAGE } from '../services/smartApi';
 
 export default function SettingsScreen() {
   const { colors, isDark, toggle } = useTheme();
@@ -24,9 +25,14 @@ export default function SettingsScreen() {
   const [anthropicModal, setAnthropicModal] = useState(false);
   const [anthropicInput, setAnthropicInput] = useState('');
 
+  const [smartKey, setSmartKey] = useState('');
+  const [smartModal, setSmartModal] = useState(false);
+  const [smartInput, setSmartInput] = useState('');
+
   useEffect(() => {
     AsyncStorage.getItem(API_KEY_STORAGE).then(k => { if (k) setFootballKey(k); });
     AsyncStorage.getItem(ANTHROPIC_KEY_STORAGE).then(k => { if (k) setAnthropicKey(k); });
+    AsyncStorage.getItem(SMART_API_KEY_STORAGE).then(k => { if (k) setSmartKey(k); });
   }, []);
 
   async function saveFootballKey() {
@@ -56,6 +62,20 @@ export default function SettingsScreen() {
   async function removeAnthropicKey() {
     await AsyncStorage.removeItem(ANTHROPIC_KEY_STORAGE);
     setAnthropicKey('');
+  }
+
+  async function saveSmartKey() {
+    const k = smartInput.trim();
+    if (!k) return;
+    await AsyncStorage.setItem(SMART_API_KEY_STORAGE, k);
+    setSmartKey(k);
+    setSmartModal(false);
+    setSmartInput('');
+  }
+
+  async function removeSmartKey() {
+    await AsyncStorage.removeItem(SMART_API_KEY_STORAGE);
+    setSmartKey('');
   }
 
   function handleResetBanca() {
@@ -172,6 +192,22 @@ export default function SettingsScreen() {
               Análise IA gratuita: gols, escanteios, cartões, resultado. 14.400 req/dia. Chave GRATUITA em console.groq.com
             </Text>
           </View>
+
+          <KeyRow
+            icon="analytics-outline"
+            title="RapidAPI — xG ao Vivo"
+            keyValue={smartKey}
+            onConfigure={() => { setSmartInput(smartKey); setSmartModal(true); }}
+            onRemove={() => Alert.alert('Remover chave?', 'xG real nas sugestões ao vivo será desativado.', [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Remover', style: 'destructive', onPress: removeSmartKey },
+            ])}
+          />
+          <View style={[s.apiInfo, { borderTopColor: colors.border }]}>
+            <Text style={[s.apiInfoText, { color: colors.textSecondary }]}>
+              xG real, posse, chutes e escanteios ao vivo. 100 req/dia grátis. Chave em rapidapi.com → "Free API Live Football Data"
+            </Text>
+          </View>
         </View>
 
         {/* Banca */}
@@ -228,6 +264,30 @@ export default function SettingsScreen() {
                 <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[s.modalBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]} onPress={saveFootballKey}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Salvar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Smart API Key */}
+      <Modal visible={smartModal} transparent animationType="slide">
+        <View style={s.overlay}>
+          <View style={[s.modal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[s.modalTitle, { color: colors.text }]}>RapidAPI — xG ao Vivo</Text>
+            <Text style={[s.modalSub, { color: colors.textSecondary }]}>
+              🆓 100 req/dia grátis{'\n'}
+              1. rapidapi.com → busque "Free API Live Football Data"{'\n'}
+              2. Subscribe → plano Free{'\n'}
+              3. Copie o "X-RapidAPI-Key" e cole abaixo
+            </Text>
+            <TextInput style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} placeholder="Cole sua chave RapidAPI aqui" placeholderTextColor={colors.textSecondary} value={smartInput} onChangeText={setSmartInput} autoCapitalize="none" autoCorrect={false} />
+            <View style={s.modalBtns}>
+              <TouchableOpacity style={[s.modalBtn, { borderColor: colors.border }]} onPress={() => setSmartModal(false)}>
+                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.modalBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]} onPress={saveSmartKey}>
                 <Text style={{ color: '#fff', fontWeight: '700' }}>Salvar</Text>
               </TouchableOpacity>
             </View>

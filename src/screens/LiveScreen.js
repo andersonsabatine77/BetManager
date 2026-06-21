@@ -11,6 +11,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useApp } from '../context/AppContext';
 import { formatBRL } from '../utils/formatters';
 import { fetchLiveMatches, fetchTodayMatches, generateLiveSuggestions, getMatchMinute, formatLeague } from '../services/liveApi';
+import { fetchMatchStats, saveSmartApiKey, SMART_API_KEY_STORAGE } from '../services/smartApi';
 
 const API_KEY_STORAGE = '@betmanager_football_api_key';
 const POLL_INTERVAL = 60000;
@@ -43,13 +44,28 @@ const sc = StyleSheet.create({
   rationale: { fontSize: 11, marginLeft: 19 },
 });
 
-function MatchCard({ match, colors, onBet }) {
+function StatBadge({ icon, label, value, color }) {
+  if (value === null || value === undefined) return null;
+  return (
+    <View style={[sb.badge, { borderColor: color + '44', backgroundColor: color + '11' }]}>
+      <Ionicons name={icon} size={11} color={color} />
+      <Text style={[sb.label, { color }]}>{label} {value}</Text>
+    </View>
+  );
+}
+const sb = StyleSheet.create({
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 6, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2 },
+  label: { fontSize: 10, fontWeight: '700' },
+});
+
+function MatchCard({ match, stats, colors, onBet }) {
   const homeGoals = match.score?.fullTime?.home ?? match.score?.halfTime?.home ?? 0;
   const awayGoals = match.score?.fullTime?.away ?? match.score?.halfTime?.away ?? 0;
   const minute = getMatchMinute(match);
-  const sugs = generateLiveSuggestions(match);
+  const sugs = generateLiveSuggestions(match, stats);
   const isLive = match.status === 'IN_PLAY' || match.status === 'HALFTIME';
   const statusLabel = match.status === 'HALFTIME' ? 'Intervalo' : match.status === 'IN_PLAY' ? `${minute}'` : 'Em breve';
+  const hasStats = stats && (stats.home.xg !== null || stats.home.shots !== null);
 
   return (
     <View style={[mc.card, { backgroundColor: colors.card, borderColor: isLive ? '#ef4444' : colors.border }]}>
@@ -67,9 +83,30 @@ function MatchCard({ match, colors, onBet }) {
         </View>
         <Text style={[mc.teamName, { color: colors.text, textAlign: 'right' }]} numberOfLines={1}>{match.awayTeam?.shortName || match.awayTeam?.name}</Text>
       </View>
+
+      {/* Estatísticas reais */}
+      {hasStats && (
+        <View style={mc.statsRow}>
+          {stats.home.xg !== null && (
+            <StatBadge icon="analytics-outline" label="xG" value={`${stats.home.xg.toFixed(2)}–${stats.away.xg?.toFixed(2)}`} color={colors.primary} />
+          )}
+          {stats.home.possession !== null && (
+            <StatBadge icon="pie-chart-outline" label="Posse" value={`${stats.home.possession}%–${stats.away.possession}%`} color={colors.warning} />
+          )}
+          {stats.home.shots !== null && (
+            <StatBadge icon="flash-outline" label="Chutes" value={`${stats.home.shots}–${stats.away.shots}`} color={colors.success} />
+          )}
+          {stats.home.corners !== null && (
+            <StatBadge icon="flag-outline" label="Cant." value={`${stats.home.corners}–${stats.away.corners}`} color={colors.textSecondary} />
+          )}
+        </View>
+      )}
+
       {sugs.length > 0 && (
         <View style={{ marginTop: 10 }}>
-          <Text style={[mc.sugTitle, { color: colors.textSecondary }]}>Sugestões ao vivo</Text>
+          <Text style={[mc.sugTitle, { color: colors.textSecondary }]}>
+            {hasStats ? '🧪 Sugestões com xG real' : 'Sugestões ao vivo'}
+          </Text>
           {sugs.map((sug, i) => <SuggestionChip key={i} sug={sug} colors={colors} />)}
         </View>
       )}
@@ -90,6 +127,7 @@ const mc = StyleSheet.create({
   teamName: { fontSize: 14, fontWeight: '700', flex: 1 },
   scorebox: { borderRadius: 10, paddingHorizontal: 16, paddingVertical: 6 },
   score: { fontSize: 20, fontWeight: '800', letterSpacing: 2 },
+  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   sugTitle: { fontSize: 11, fontWeight: '700', marginBottom: 2, letterSpacing: 0.5 },
   betBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, padding: 12, marginTop: 14 },
   betBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
@@ -103,6 +141,7 @@ export default function LiveScreen() {
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [liveMatches, setLiveMatches] = useState([]);
   const [todayMatches, setTodayMatches] = useState([]);
+  const [matchStats, setMatchStats] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
@@ -128,6 +167,15 @@ export default function LiveScreen() {
       setLiveMatches(live);
       setTodayMatches(today.filter(m => m.status !== 'IN_PLAY' && m.status !== 'HALFTIME'));
       setLastUpdate(new Date());
+      // Busca estatísticas reais (xG, posse, chutes) para jogos ao vivo
+      if (live.length > 0) {
+        const statsMap = {};
+        await Promise.all(live.slice(0, 10).map(async m => {
+          const s = await fetchMatchStats(m.id);
+          if (s) statsMap[m.id] = s;
+        }));
+        setMatchStats(prev => ({ ...prev, ...statsMap }));
+      }
     } catch (e) {
       setError(e.message);
     } finally {
@@ -257,7 +305,7 @@ export default function LiveScreen() {
           contentContainerStyle={s.list}
           refreshControl={<RefreshControl refreshing={loading} onRefresh={() => loadMatches()} tintColor={colors.primary} />}
         >
-          {displayMatches.map(m => <MatchCard key={m.id} match={m} colors={colors} onBet={openBet} />)}
+          {displayMatches.map(m => <MatchCard key={m.id} match={m} stats={matchStats[m.id] || null} colors={colors} onBet={openBet} />)}
           <View style={{ height: 32 }} />
         </ScrollView>
       )}
