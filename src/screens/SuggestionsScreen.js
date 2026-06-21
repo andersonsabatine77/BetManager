@@ -46,6 +46,7 @@ function AiSuggestions({ aiData, loading, error, colors }) {
         <Text style={[ai.analyzing, { color: colors.danger }]}>
           {error === 'INVALID_AI_KEY' ? 'Chave Gemini inválida — verifique em Configurações' :
            error === 'NO_AI_KEY' ? 'Chave Gemini não configurada' :
+           error?.includes('Cota') ? 'Cota gratuita atingida — aguarde 1 min e puxe para atualizar' :
            `Erro IA: ${error}`}
         </Text>
       </View>
@@ -131,7 +132,7 @@ export default function SuggestionsScreen() {
     AsyncStorage.getItem(ANTHROPIC_KEY_STORAGE).then(key => {
       if (!key) return;
       setHasAiKey(true);
-      const toAnalyze = sugestoes.filter(s => s.esporte === 'futebol').slice(0, 12);
+      const toAnalyze = sugestoes.filter(s => s.esporte === 'futebol').slice(0, 6);
       if (toAnalyze.length === 0) return;
 
       // Mark all as loading

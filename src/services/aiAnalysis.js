@@ -71,18 +71,20 @@ Responda SOMENTE com JSON válido, sem texto antes ou depois:
   return JSON.parse(jsonMatch[0]);
 }
 
-export async function analyzeMatchesBatch(matches, onResult, concurrency = 2) {
-  for (let i = 0; i < matches.length; i += concurrency) {
-    const batch = matches.slice(i, i + concurrency);
-    await Promise.allSettled(
-      batch.map(async (match) => {
-        try {
-          const result = await analyzeMatch(match);
-          onResult(match.id, { data: result.sugestoes, error: null });
-        } catch (e) {
-          onResult(match.id, { data: null, error: e.message });
-        }
-      })
-    );
+const delay = (ms) => new Promise(r => setTimeout(r, ms));
+
+// Sequencial com pausa de 2s entre chamadas para respeitar o free tier (15 RPM)
+export async function analyzeMatchesBatch(matches, onResult, _concurrency = 1) {
+  const limited = matches.slice(0, 6); // máximo 6 análises por vez
+  for (let i = 0; i < limited.length; i++) {
+    const match = limited[i];
+    try {
+      const result = await analyzeMatch(match);
+      onResult(match.id, { data: result.sugestoes, error: null });
+    } catch (e) {
+      const msg = e.message.includes('429') ? 'Cota gratuita atingida — tente novamente em 1 minuto' : e.message;
+      onResult(match.id, { data: null, error: msg });
+    }
+    if (i < limited.length - 1) await delay(2000); // 2s entre requisições
   }
 }
