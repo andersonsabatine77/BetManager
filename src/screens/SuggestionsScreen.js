@@ -117,7 +117,6 @@ export default function SuggestionsScreen() {
   const [mResultado, setMResultado] = useState(null);
   const [mEsporte, setMEsporte] = useState('futebol');
 
-  // AI analysis state: { [matchId]: { data: [...] | null, loading: bool, error: string|null } }
   const [aiResults, setAiResults] = useState({});
   const [hasAiKey, setHasAiKey] = useState(false);
   const analysisRunning = useRef(false);
@@ -126,31 +125,62 @@ export default function SuggestionsScreen() {
     AsyncStorage.getItem(ANTHROPIC_KEY_STORAGE).then(k => setHasAiKey(!!k));
   }, []);
 
-  // Trigger AI analysis when suggestions load
-  useEffect(() => {
-    if (!sugestoes || sugestoes.length === 0 || analysisRunning.current) return;
-    AsyncStorage.getItem(ANTHROPIC_KEY_STORAGE).then(key => {
-      if (!key) return;
-      setHasAiKey(true);
-      const toAnalyze = sugestoes.filter(s => s.esporte === 'futebol').slice(0, 6);
-      if (toAnalyze.length === 0) return;
+  // Cache key muda quando os jogos mudam (usa IDs como fingerprint)
+  function getCacheKey(matches) {
+    const today = new Date().toISOString().slice(0, 10);
+    const ids = matches.map(m => m.id).join(',');
+    return `@ai_cache_${today}_${ids.slice(0, 40)}`;
+  }
 
-      // Mark all as loading
-      const initial = {};
-      toAnalyze.forEach(s => { initial[s.id] = { data: null, loading: true, error: null }; });
-      setAiResults(initial);
+  async function runAiAnalysis(matches, forceRefresh = false) {
+    if (analysisRunning.current) return;
+    const key = await AsyncStorage.getItem(ANTHROPIC_KEY_STORAGE);
+    if (!key) return;
+    setHasAiKey(true);
 
-      analysisRunning.current = true;
-      analyzeMatchesBatch(
-        toAnalyze,
-        (id, result) => {
-          setAiResults(prev => ({ ...prev, [id]: { data: result.data, loading: false, error: result.error } }));
-        },
-        2 // 2 concurrent requests
-      ).finally(() => {
-        analysisRunning.current = false;
-      });
+    const toAnalyze = matches.filter(s => s.esporte === 'futebol').slice(0, 8);
+    if (toAnalyze.length === 0) return;
+
+    // Verifica cache (exceto se forçar refresh)
+    if (!forceRefresh) {
+      try {
+        const cacheKey = getCacheKey(toAnalyze);
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached) {
+          setAiResults(JSON.parse(cached));
+          return;
+        }
+      } catch (_) {}
+    }
+
+    // Marca como carregando
+    const initial = {};
+    toAnalyze.forEach(s => { initial[s.id] = { data: null, loading: true, error: null }; });
+    setAiResults(initial);
+
+    const accumulated = {};
+    analysisRunning.current = true;
+
+    await analyzeMatchesBatch(toAnalyze, (id, result) => {
+      accumulated[id] = { data: result.data, loading: false, error: result.error };
+      setAiResults(prev => ({ ...prev, [id]: accumulated[id] }));
     });
+
+    analysisRunning.current = false;
+
+    // Salva cache apenas se não houve erro global
+    const hasError = Object.values(accumulated).some(r => r.error?.includes('Cota') || r.error?.includes('QUOTA'));
+    if (!hasError) {
+      try {
+        const cacheKey = getCacheKey(toAnalyze);
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(accumulated));
+      } catch (_) {}
+    }
+  }
+
+  useEffect(() => {
+    if (!sugestoes || sugestoes.length === 0) return;
+    runAiAnalysis(sugestoes);
   }, [sugestoes]);
 
   const filtered = sportFilter === 'Todos' ? sugestoes : sugestoes.filter(s => s.esporte === sportFilter);
@@ -250,7 +280,7 @@ export default function SuggestionsScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.list}
-        refreshControl={<RefreshControl refreshing={sugestoesLoading} onRefresh={reloadSugestoes} tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={sugestoesLoading} onRefresh={() => { reloadSugestoes(); runAiAnalysis(sugestoes, true); }} tintColor={colors.primary} />}
       >
         {filtered.length === 0 && !sugestoesLoading && (
           <View style={s.empty}>
