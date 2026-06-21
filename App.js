@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
@@ -56,6 +56,8 @@ function AppNavigator() {
   const { colors, isDark } = useTheme();
   const { sugestoes } = useApp();
   const sugCount = sugestoes ? sugestoes.length : 0;
+  const insets = useSafeAreaInsets();
+  const TAB_HEIGHT = 58;
 
   return (
     <>
@@ -69,9 +71,9 @@ function AppNavigator() {
               backgroundColor: colors.card,
               borderTopColor: colors.border,
               borderTopWidth: 1,
-              paddingBottom: 4,
+              paddingBottom: insets.bottom,
               paddingTop: 4,
-              height: 58,
+              height: TAB_HEIGHT + insets.bottom,
               elevation: 12,
               shadowColor: '#000',
               shadowOffset: { width: 0, height: -4 },
