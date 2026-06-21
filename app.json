@@ -22,7 +22,9 @@
       "package": "com.betmanager.pro"
     },
     "plugins": [
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-font",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {
