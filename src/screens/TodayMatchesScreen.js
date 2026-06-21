@@ -18,10 +18,29 @@ function getHourBRT(utcDateStr) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-function getTodayBRT() {
-  const now = new Date();
-  const brt = new Date(now.getTime() - 3 * 3600 * 1000);
+function toDateStr(d) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+// Retorna o dia de hoje em BRT como string "YYYY-MM-DD"
+function todayBRT() {
+  const brt = new Date(Date.now() - 3 * 3600 * 1000);
   return `${brt.getUTCFullYear()}-${String(brt.getUTCMonth() + 1).padStart(2, '0')}-${String(brt.getUTCDate()).padStart(2, '0')}`;
+}
+
+// Verifica se um jogo UTC cai no "hoje" do BRT
+function isMatchTodayBRT(utcDateStr) {
+  const brt = new Date(new Date(utcDateStr).getTime() - 3 * 3600 * 1000);
+  const matchDay = `${brt.getUTCFullYear()}-${String(brt.getUTCMonth() + 1).padStart(2, '0')}-${String(brt.getUTCDate()).padStart(2, '0')}`;
+  return matchDay === todayBRT();
+}
+
+// Busca range UTC amplo: ontem até amanhã, depois filtra por data BRT no cliente
+function getUTCRange() {
+  const now = new Date();
+  const yesterday = new Date(now); yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const tomorrow  = new Date(now); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  return { dateFrom: toDateStr(yesterday), dateTo: toDateStr(tomorrow) };
 }
 
 const STATUS_MAP = {
@@ -66,14 +85,17 @@ export default function TodayMatchesScreen() {
     setLoading(true);
     setError(null);
     try {
-      const today = getTodayBRT();
-      const res = await fetch(`${BASE}/matches?dateFrom=${today}&dateTo=${today}`, {
+      const { dateFrom, dateTo } = getUTCRange();
+      const res = await fetch(`${BASE}/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`, {
         headers: { 'X-Auth-Token': k },
       });
       if (res.status === 403) throw new Error('INVALID_KEY');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const sorted = (data.matches || []).sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+      // Filtra só os jogos cujo dia BRT é hoje, ordena por horário
+      const sorted = (data.matches || [])
+        .filter(m => isMatchTodayBRT(m.utcDate))
+        .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
       setMatches(sorted);
       setLastUpdate(new Date());
     } catch (e) {
