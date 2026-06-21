@@ -1,9 +1,5 @@
 const BASE = 'https://api.football-data.org/v4';
 
-// football-data.org free tier: 10 req/min
-// Free key covers: Premier League, La Liga, Champions League, etc.
-// Get your free key at: https://www.football-data.org/client/register
-
 export async function fetchLiveMatches(apiKey) {
   if (!apiKey) throw new Error('NO_KEY');
   const res = await fetch(`${BASE}/matches?status=LIVE`, {
@@ -27,91 +23,144 @@ export async function fetchTodayMatches(apiKey) {
   return data.matches || [];
 }
 
-// Algorithm: generate real-time suggestions based on match state
+// Modelo de xG simulado baseado em dados disponíveis na API gratuita.
+// Sem acesso a chutes/posse/escanteios — estimamos a partir do placar e minuto.
+function estimateXG(goals, minute, isHome) {
+  if (minute <= 0) return 0;
+  // xG base pela taxa de gols do jogo + bônus mandante
+  const goalRate = goals / minute;
+  const homeBias = isHome ? 0.08 : 0;
+  return (goalRate * 90) + homeBias;
+}
+
+function xGconfidence(xG, threshold) {
+  // Quanto maior o xG acima do threshold, maior a confiança (65–90)
+  const delta = xG - threshold;
+  return Math.max(62, Math.min(90, Math.round(65 + delta * 18)));
+}
+
 export function generateLiveSuggestions(match) {
   const homeGoals = match.score?.fullTime?.home ?? match.score?.halfTime?.home ?? 0;
   const awayGoals = match.score?.fullTime?.away ?? match.score?.halfTime?.away ?? 0;
-  const minute = match.minute || 0;
+  const minute   = match.minute || 0;
   const totalGoals = homeGoals + awayGoals;
+  const remaining  = Math.max(0, 90 - minute);
+  const isHalf     = match.status === 'HALFTIME';
   const suggestions = [];
 
-  // Goal pace projection
-  const pace = minute > 5 ? (totalGoals / minute) * 90 : 2.2;
-  const remaining = 90 - Math.min(minute, 90);
-  const projected = totalGoals + (pace * (remaining / 90));
+  // xG simulado por time
+  const xGHome = estimateXG(homeGoals, Math.max(minute, 1), true);
+  const xGAway = estimateXG(awayGoals, Math.max(minute, 1), false);
+  const xGTotal = xGHome + xGAway;
 
-  // Over/Under based on pace
-  if (minute < 75) {
-    if (totalGoals >= 3) {
+  // Projeção de gols ao fim dos 90min
+  const projectedTotal = minute > 5
+    ? totalGoals + (xGTotal / 90) * remaining
+    : 2.3;
+
+  // ── Mais de 2.5 Gols ────────────────────────────────────────────────
+  if (projectedTotal >= 2.8 && minute < 70 && totalGoals >= 2) {
+    const conf = xGconfidence(projectedTotal, 2.5);
+    suggestions.push({
+      tipo: 'Mais de 2.5 Gols',
+      rationale: `xG total ${xGTotal.toFixed(1)} — projeção ${projectedTotal.toFixed(1)} gols`,
+      confianca: conf,
+      icon: 'trending-up-outline',
+    });
+  }
+
+  // ── Menos de 2.5 Gols ───────────────────────────────────────────────
+  if (projectedTotal < 1.9 && minute > 25 && totalGoals <= 1) {
+    const conf = xGconfidence(2.5 - projectedTotal, 0);
+    suggestions.push({
+      tipo: 'Menos de 2.5 Gols',
+      rationale: `xG baixo (${xGTotal.toFixed(1)}) — jogo truncado aos ${minute}'`,
+      confianca: conf,
+      icon: 'trending-down-outline',
+    });
+  }
+
+  // ── Mais de 3.5 Gols ────────────────────────────────────────────────
+  if (totalGoals >= 3 && minute < 65) {
+    suggestions.push({
+      tipo: 'Mais de 3.5 Gols',
+      rationale: `${totalGoals} gols em ${minute}' — ritmo muito alto`,
+      confianca: Math.min(90, 68 + totalGoals * 5),
+      icon: 'flame-outline',
+    });
+  }
+
+  // ── Ambos Marcam ────────────────────────────────────────────────────
+  if (homeGoals >= 1 && awayGoals === 0 && minute < 65 && xGAway >= 0.5) {
+    suggestions.push({
+      tipo: 'Ambos Marcam - Sim',
+      rationale: `xG visitante ${xGAway.toFixed(1)} — visitante deve marcar`,
+      confianca: Math.round(62 + xGAway * 8),
+      icon: 'football-outline',
+    });
+  } else if (awayGoals >= 1 && homeGoals === 0 && minute < 65 && xGHome >= 0.5) {
+    suggestions.push({
+      tipo: 'Ambos Marcam - Sim',
+      rationale: `xG mandante ${xGHome.toFixed(1)} — mandante deve responder`,
+      confianca: Math.round(62 + xGHome * 8),
+      icon: 'football-outline',
+    });
+  }
+
+  // ── Vitória Mandante ─────────────────────────────────────────────────
+  if (homeGoals > awayGoals && minute > 30) {
+    const diff = homeGoals - awayGoals;
+    const timeConf = Math.floor(minute / 10) * 2;
+    const conf = Math.min(92, 63 + diff * 9 + timeConf);
+    suggestions.push({
+      tipo: 'Vitória Mandante',
+      rationale: `Vence por ${homeGoals}–${awayGoals} (${minute}') — xG ${xGHome.toFixed(1)}×${xGAway.toFixed(1)}`,
+      confianca: conf,
+      icon: 'shield-checkmark-outline',
+    });
+  }
+
+  // ── Vitória Visitante ────────────────────────────────────────────────
+  if (awayGoals > homeGoals && minute > 30) {
+    const diff = awayGoals - homeGoals;
+    const timeConf = Math.floor(minute / 10) * 2;
+    const conf = Math.min(90, 61 + diff * 9 + timeConf);
+    suggestions.push({
+      tipo: 'Vitória Visitante',
+      rationale: `Visitante vence ${awayGoals}–${homeGoals} (${minute}') — xG ${xGAway.toFixed(1)}×${xGHome.toFixed(1)}`,
+      confianca: conf,
+      icon: 'shield-checkmark-outline',
+    });
+  }
+
+  // ── Empate ───────────────────────────────────────────────────────────
+  if (homeGoals === awayGoals && minute > 65) {
+    const conf = Math.round(55 + (minute - 65) * 0.9);
+    if (conf >= 60) {
       suggestions.push({
-        tipo: 'Mais de 3.5 Gols',
-        rationale: `${totalGoals} gols em ${minute}min — ritmo alto`,
-        confianca: Math.min(88, 60 + totalGoals * 8),
-        icon: 'trending-up-outline',
-      });
-    } else if (projected >= 2.8 && minute < 60) {
-      suggestions.push({
-        tipo: 'Mais de 2.5 Gols',
-        rationale: `Projeção: ${projected.toFixed(1)} gols no total`,
-        confianca: Math.round(55 + (projected - 2.5) * 20),
-        icon: 'trending-up-outline',
-      });
-    } else if (projected < 2.0 && minute > 20) {
-      suggestions.push({
-        tipo: 'Menos de 2.5 Gols',
-        rationale: `Jogo truncado — ${totalGoals} gol(s) em ${minute}min`,
-        confianca: Math.round(60 + (2.0 - projected) * 15),
-        icon: 'trending-down-outline',
+        tipo: 'Empate',
+        rationale: `${homeGoals}–${awayGoals} empatado com ${remaining}' restantes`,
+        confianca: Math.min(82, conf),
+        icon: 'remove-circle-outline',
       });
     }
   }
 
-  // BTTS
-  if (homeGoals === 0 && minute < 70) {
+  // ── Dupla Chance ─────────────────────────────────────────────────────
+  if (homeGoals > awayGoals && minute < 45 && homeGoals - awayGoals === 1) {
     suggestions.push({
-      tipo: 'Ambos Marcam - Sim',
-      rationale: `Mandante ainda não marcou (${minute}min restantes)`,
-      confianca: minute < 50 ? 67 : 55,
-      icon: 'football-outline',
-    });
-  } else if (awayGoals === 0 && minute < 70) {
-    suggestions.push({
-      tipo: 'Ambos Marcam - Sim',
-      rationale: `Visitante ainda não marcou (${remaining}min restantes)`,
-      confianca: minute < 50 ? 65 : 52,
-      icon: 'football-outline',
+      tipo: 'Dupla Chance - Casa/Empate',
+      rationale: `Mandante 1 gol à frente no início — boa cobertura`,
+      confianca: 65,
+      icon: 'shield-half-outline',
     });
   }
 
-  // Winner / Next goal
-  if (homeGoals > awayGoals && minute > 30) {
-    suggestions.push({
-      tipo: `Vitória Mandante`,
-      rationale: `Vencendo por ${homeGoals}-${awayGoals} aos ${minute}min`,
-      confianca: Math.min(90, 65 + (homeGoals - awayGoals) * 8 + Math.floor(minute / 10) * 2),
-      icon: 'shield-checkmark-outline',
-    });
-  } else if (awayGoals > homeGoals && minute > 30) {
-    suggestions.push({
-      tipo: `Vitória Visitante`,
-      rationale: `Visitante vence por ${awayGoals}-${homeGoals} aos ${minute}min`,
-      confianca: Math.min(87, 62 + (awayGoals - homeGoals) * 8 + Math.floor(minute / 10) * 2),
-      icon: 'shield-checkmark-outline',
-    });
-  }
-
-  // Draw suggestion
-  if (homeGoals === awayGoals && minute > 60) {
-    suggestions.push({
-      tipo: 'Empate',
-      rationale: `Placar empatado em ${homeGoals}-${awayGoals} com ${remaining}min`,
-      confianca: Math.round(50 + (minute - 60) * 0.8),
-      icon: 'remove-circle-outline',
-    });
-  }
-
-  // Cap at 3
-  return suggestions.slice(0, 3);
+  // Filtra abaixo de 60% e limita a 3
+  return suggestions
+    .filter(s => s.confianca >= 60)
+    .sort((a, b) => b.confianca - a.confianca)
+    .slice(0, 3);
 }
 
 export function getMatchMinute(match) {

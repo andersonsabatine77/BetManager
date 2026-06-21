@@ -53,7 +53,7 @@ function AiSuggestions({ aiData, loading, error, colors }) {
     );
   }
 
-  const filtered = (aiData || []).filter(s => (parseInt(s.confianca, 10) || 0) >= 55);
+  const filtered = (aiData || []).filter(s => (parseInt(s.confianca, 10) || 0) >= 60);
   if (filtered.length === 0) return null;
 
   return (
@@ -140,7 +140,7 @@ export default function SuggestionsScreen() {
     if (!key) return;
     setHasAiKey(true);
 
-    const toAnalyze = matches.filter(s => s.esporte === 'futebol').slice(0, 8);
+    const toAnalyze = matches.filter(s => s.esporte === 'futebol');
     if (toAnalyze.length === 0) return;
 
     // Verifica cache (exceto se forçar refresh)
