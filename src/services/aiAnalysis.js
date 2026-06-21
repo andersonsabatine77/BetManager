@@ -1,38 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const ANTHROPIC_KEY_STORAGE = '@betmanager_anthropic_key'; // reused as generic AI key storage
+export const ANTHROPIC_KEY_STORAGE = '@betmanager_anthropic_key';
 
-const GEMINI_MODELS = [
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-flash',
-  'gemini-pro',
-];
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODEL = 'llama-3.1-8b-instant';
 
-async function callGemini(apiKey, prompt, maxTokens = 2000) {
-  for (const model of GEMINI_MODELS) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: maxTokens },
-      }),
-    });
-    if (res.status === 400 || res.status === 403) throw new Error('INVALID_AI_KEY');
-    if (res.status === 404) continue;
-    if (res.status === 429) throw new Error('QUOTA_429');
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`AI_ERROR_${res.status}: ${body.slice(0, 80)}`);
-    }
-    return res;
+async function callGroq(apiKey, prompt) {
+  const res = await fetch(GROQ_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.4,
+      max_tokens: 3000,
+    }),
+  });
+  if (res.status === 401) throw new Error('INVALID_AI_KEY');
+  if (res.status === 429) throw new Error('QUOTA_429');
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`AI_ERROR_${res.status}: ${body.slice(0, 80)}`);
   }
-  throw new Error('AI_ERROR_404');
+  return res;
 }
 
-// UMA única chamada com todos os jogos — evita rate limiting
 export async function analyzeMatchesBatch(matches, onResult) {
   const apiKey = await AsyncStorage.getItem(ANTHROPIC_KEY_STORAGE);
   if (!apiKey) {
@@ -41,34 +36,22 @@ export async function analyzeMatchesBatch(matches, onResult) {
   }
 
   const limited = matches.slice(0, 8);
-
   const lista = limited.map((m, i) =>
     `${i + 1}. ID:${m.id} | ${m.liga} | Mandante: ${m.time1} | Visitante: ${m.time2}`
   ).join('\n');
 
-  const prompt = `Você é um especialista em análise de apostas esportivas. Analise os jogos abaixo e para CADA UM sugira as 3 melhores entradas considerando: gols (Over/Under 0.5/1.5/2.5/3.5), BTTS (ambos marcam), escanteios (8.5/9.5/10.5), cartões (3.5/4.5), resultado (1X2, dupla chance).
+  const prompt = `Você é especialista em apostas esportivas. Analise os jogos e para CADA UM sugira as 3 melhores entradas: gols (Over/Under 0.5/1.5/2.5/3.5), BTTS, escanteios (8.5/9.5/10.5), cartões (3.5/4.5), resultado (1X2, dupla chance).
 
 JOGOS:
 ${lista}
 
-Responda SOMENTE com JSON válido neste formato exato (sem texto antes ou depois):
-{
-  "analises": [
-    {
-      "id": "ID_DO_JOGO",
-      "sugestoes": [
-        {"tipo": "Mais de 2.5 Gols", "confianca": 75, "razao": "motivo curto"},
-        {"tipo": "Ambos Marcam - Sim", "confianca": 70, "razao": "motivo curto"},
-        {"tipo": "Vitória Mandante", "confianca": 65, "razao": "motivo curto"}
-      ]
-    }
-  ]
-}`;
+Responda SOMENTE com JSON válido (sem texto antes ou depois):
+{"analises":[{"id":"ID_DO_JOGO","sugestoes":[{"tipo":"Mais de 2.5 Gols","confianca":75,"razao":"motivo curto"},{"tipo":"Ambos Marcam - Sim","confianca":70,"razao":"motivo curto"},{"tipo":"Vitória Mandante","confianca":65,"razao":"motivo curto"}]}]}`;
 
   try {
-    const res = await callGemini(apiKey, prompt, 3000);
+    const res = await callGroq(apiKey, prompt);
     const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const text = data.choices?.[0]?.message?.content || '';
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('PARSE_ERROR');
@@ -76,26 +59,16 @@ Responda SOMENTE com JSON válido neste formato exato (sem texto antes ou depois
     const parsed = JSON.parse(jsonMatch[0]);
     const analises = parsed.analises || [];
 
-    // Distribui resultados para cada jogo
     limited.forEach(m => {
-      const found = analises.find(a => a.id === m.id);
-      if (found?.sugestoes?.length > 0) {
-        onResult(m.id, { data: found.sugestoes, error: null });
-      } else {
-        onResult(m.id, { data: null, error: null }); // sem sugestão mas sem erro
-      }
+      const found = analises.find(a => String(a.id) === String(m.id));
+      onResult(m.id, { data: found?.sugestoes?.length ? found.sugestoes : null, error: null });
     });
   } catch (e) {
-    const msg = e.message === 'QUOTA_429'
-      ? 'Cota do Gemini atingida — aguarde 1 minuto'
-      : e.message === 'INVALID_AI_KEY'
-      ? 'Chave Gemini inválida'
+    const msg = e.message === 'QUOTA_429' ? 'Cota Groq atingida — tente em 1 min'
+      : e.message === 'INVALID_AI_KEY' ? 'Chave Groq inválida — verifique em Configurações'
       : `Erro IA: ${e.message}`;
     limited.forEach(m => onResult(m.id, { data: null, error: msg }));
   }
 }
 
-// Mantido para compatibilidade (não usado mais)
-export async function analyzeMatch(match) {
-  return { sugestoes: [] };
-}
+export async function analyzeMatch() { return { sugestoes: [] }; }

@@ -159,7 +159,7 @@ export default function SettingsScreen() {
 
           <KeyRow
             icon="sparkles-outline"
-            title="Google Gemini AI"
+            title="Groq AI (Llama 3)"
             keyValue={anthropicKey}
             onConfigure={() => { setAnthropicInput(anthropicKey); setAnthropicModal(true); }}
             onRemove={() => Alert.alert('Remover chave?', 'Análise IA por jogo será desativada.', [
@@ -169,7 +169,7 @@ export default function SettingsScreen() {
           />
           <View style={[s.apiInfo, { borderTopColor: colors.border }]}>
             <Text style={[s.apiInfoText, { color: colors.textSecondary }]}>
-              Análise IA gratuita por jogo: gols, escanteios, cartões, resultado. Chave GRATUITA em aistudio.google.com
+              Análise IA gratuita: gols, escanteios, cartões, resultado. 14.400 req/dia. Chave GRATUITA em console.groq.com
             </Text>
           </View>
         </View>
@@ -235,18 +235,18 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      {/* Modal Anthropic Key */}
+      {/* Modal Groq Key */}
       <Modal visible={anthropicModal} transparent animationType="slide">
         <View style={s.overlay}>
           <View style={[s.modal, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[s.modalTitle, { color: colors.text }]}>Google Gemini AI</Text>
+            <Text style={[s.modalTitle, { color: colors.text }]}>Groq AI — Llama 3</Text>
             <Text style={[s.modalSub, { color: colors.textSecondary }]}>
               🆓 100% gratuito — sem cartão de crédito{'\n'}
-              1. Acesse aistudio.google.com{'\n'}
-              2. Clique em "Get API Key"{'\n'}
-              3. Cole a chave abaixo (começa com AIza...)
+              1. Acesse console.groq.com{'\n'}
+              2. Clique em "API Keys" → "Create API Key"{'\n'}
+              3. Cole a chave abaixo (começa com gsk_...)
             </Text>
-            <TextInput style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} placeholder="AIza..." placeholderTextColor={colors.textSecondary} value={anthropicInput} onChangeText={setAnthropicInput} autoCapitalize="none" autoCorrect={false} />
+            <TextInput style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} placeholder="gsk_..." placeholderTextColor={colors.textSecondary} value={anthropicInput} onChangeText={setAnthropicInput} autoCapitalize="none" autoCorrect={false} />
             <View style={s.modalBtns}>
               <TouchableOpacity style={[s.modalBtn, { borderColor: colors.border }]} onPress={() => setAnthropicModal(false)}>
                 <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancelar</Text>
