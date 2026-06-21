@@ -6,9 +6,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useApp } from '../context/AppContext';
 import { formatBRL } from '../utils/formatters';
-import { API_KEY_STORAGE } from '../services/suggestionsApi';
-import { ANTHROPIC_KEY_STORAGE } from '../services/aiAnalysis';
-import { SMART_API_KEY_STORAGE } from '../services/smartApi';
+
+const FOOTBALL_KEY_STORAGE = '@betmanager_football_api_key';
 
 export default function SettingsScreen() {
   const { colors, isDark, toggle } = useTheme();
@@ -21,61 +20,22 @@ export default function SettingsScreen() {
   const [footballModal, setFootballModal] = useState(false);
   const [footballInput, setFootballInput] = useState('');
 
-  const [anthropicKey, setAnthropicKey] = useState('');
-  const [anthropicModal, setAnthropicModal] = useState(false);
-  const [anthropicInput, setAnthropicInput] = useState('');
-
-  const [smartKey, setSmartKey] = useState('');
-  const [smartModal, setSmartModal] = useState(false);
-  const [smartInput, setSmartInput] = useState('');
-
   useEffect(() => {
-    AsyncStorage.getItem(API_KEY_STORAGE).then(k => { if (k) setFootballKey(k); });
-    AsyncStorage.getItem(ANTHROPIC_KEY_STORAGE).then(k => { if (k) setAnthropicKey(k); });
-    AsyncStorage.getItem(SMART_API_KEY_STORAGE).then(k => { if (k) setSmartKey(k); });
+    AsyncStorage.getItem(FOOTBALL_KEY_STORAGE).then(k => { if (k) setFootballKey(k); });
   }, []);
 
   async function saveFootballKey() {
     const k = footballInput.trim();
     if (!k) return;
-    await AsyncStorage.setItem(API_KEY_STORAGE, k);
+    await AsyncStorage.setItem(FOOTBALL_KEY_STORAGE, k);
     setFootballKey(k);
     setFootballModal(false);
     setFootballInput('');
-    reload();
   }
 
   async function removeFootballKey() {
-    await AsyncStorage.removeItem(API_KEY_STORAGE);
+    await AsyncStorage.removeItem(FOOTBALL_KEY_STORAGE);
     setFootballKey('');
-  }
-
-  async function saveAnthropicKey() {
-    const k = anthropicInput.trim();
-    if (!k) return;
-    await AsyncStorage.setItem(ANTHROPIC_KEY_STORAGE, k);
-    setAnthropicKey(k);
-    setAnthropicModal(false);
-    setAnthropicInput('');
-  }
-
-  async function removeAnthropicKey() {
-    await AsyncStorage.removeItem(ANTHROPIC_KEY_STORAGE);
-    setAnthropicKey('');
-  }
-
-  async function saveSmartKey() {
-    const k = smartInput.trim();
-    if (!k) return;
-    await AsyncStorage.setItem(SMART_API_KEY_STORAGE, k);
-    setSmartKey(k);
-    setSmartModal(false);
-    setSmartInput('');
-  }
-
-  async function removeSmartKey() {
-    await AsyncStorage.removeItem(SMART_API_KEY_STORAGE);
-    setSmartKey('');
   }
 
   function handleResetBanca() {
@@ -88,7 +48,7 @@ export default function SettingsScreen() {
   }
 
   function handleClearAll() {
-    Alert.alert('Limpar Tudo', 'Remove TODO o histórico. Ação irreversível.', [
+    Alert.alert('Limpar Tudo', 'Remove TODO o histórico de apostas. Ação irreversível.', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Limpar', style: 'destructive', onPress: () => limparTudo() },
     ]);
@@ -110,7 +70,7 @@ export default function SettingsScreen() {
     );
   }
 
-  function KeyRow({ icon, title, keyValue, onConfigure, onRemove }) {
+  function KeyRow({ icon, title, subtitle, keyValue, onConfigure, onRemove }) {
     return (
       <View style={[sr.row, { borderBottomColor: colors.border }]}>
         <View style={[sr.iconBox, { backgroundColor: (keyValue ? colors.success : colors.primary) + '22' }]}>
@@ -119,7 +79,7 @@ export default function SettingsScreen() {
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={[sr.title, { color: colors.text }]}>{title}</Text>
           <Text style={[sr.subtitle, { color: keyValue ? colors.success : colors.textSecondary }]}>
-            {keyValue ? `${keyValue.slice(0, 8)}...${keyValue.slice(-4)} ✓` : 'Não configurada'}
+            {keyValue ? `${keyValue.slice(0, 8)}...${keyValue.slice(-4)} ✓` : subtitle || 'Não configurada'}
           </Text>
         </View>
         {keyValue ? (
@@ -141,6 +101,7 @@ export default function SettingsScreen() {
           <Text style={[s.title, { color: colors.text }]}>Configurações</Text>
         </View>
 
+        {/* Card de banca */}
         <View style={[s.bancaCard, { backgroundColor: colors.primary }]}>
           <Text style={s.bancaLabel}>Saldo Atual</Text>
           <Text style={s.bancaValue}>{formatBRL(banca.saldoAtual)}</Text>
@@ -158,54 +119,23 @@ export default function SettingsScreen() {
           />
         </View>
 
-        {/* APIs */}
+        {/* API Jogos */}
         <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>INTEGRAÇÃO</Text>
           <KeyRow
             icon="football-outline"
             title="Football-Data.org"
+            subtitle="Chave gratuita para ver jogos do dia"
             keyValue={footballKey}
             onConfigure={() => { setFootballInput(footballKey); setFootballModal(true); }}
-            onRemove={() => Alert.alert('Remover chave?', 'Jogos reais não serão carregados.', [
+            onRemove={() => Alert.alert('Remover chave?', 'Os jogos do dia não serão carregados.', [
               { text: 'Cancelar', style: 'cancel' },
               { text: 'Remover', style: 'destructive', onPress: removeFootballKey },
             ])}
           />
           <View style={[s.apiInfo, { borderTopColor: colors.border }]}>
             <Text style={[s.apiInfoText, { color: colors.textSecondary }]}>
-              Jogos ao vivo e sugestões reais. Chave gratuita em football-data.org
-            </Text>
-          </View>
-
-          <KeyRow
-            icon="sparkles-outline"
-            title="Groq AI (Llama 3)"
-            keyValue={anthropicKey}
-            onConfigure={() => { setAnthropicInput(anthropicKey); setAnthropicModal(true); }}
-            onRemove={() => Alert.alert('Remover chave?', 'Análise IA por jogo será desativada.', [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Remover', style: 'destructive', onPress: removeAnthropicKey },
-            ])}
-          />
-          <View style={[s.apiInfo, { borderTopColor: colors.border }]}>
-            <Text style={[s.apiInfoText, { color: colors.textSecondary }]}>
-              Análise IA gratuita: gols, escanteios, cartões, resultado. 14.400 req/dia. Chave GRATUITA em console.groq.com
-            </Text>
-          </View>
-
-          <KeyRow
-            icon="analytics-outline"
-            title="RapidAPI — xG ao Vivo"
-            keyValue={smartKey}
-            onConfigure={() => { setSmartInput(smartKey); setSmartModal(true); }}
-            onRemove={() => Alert.alert('Remover chave?', 'xG real nas sugestões ao vivo será desativado.', [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Remover', style: 'destructive', onPress: removeSmartKey },
-            ])}
-          />
-          <View style={[s.apiInfo, { borderTopColor: colors.border }]}>
-            <Text style={[s.apiInfoText, { color: colors.textSecondary }]}>
-              xG real, posse, chutes e escanteios ao vivo. 100 req/dia grátis. Chave em rapidapi.com → "Free API Live Football Data"
+              Chave gratuita em football-data.org → "Get free API token". Cobre Premier League, La Liga, Champions, Brasileirão e mais.
             </Text>
           </View>
         </View>
@@ -219,14 +149,14 @@ export default function SettingsScreen() {
         {/* Dados */}
         <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>DADOS</Text>
-          <SettingRow icon="refresh-outline" title="Sincronizar" subtitle="Recarregar dados do banco local" onPress={reload} />
+          <SettingRow icon="refresh-outline" title="Sincronizar" subtitle="Recarregar dados locais" onPress={reload} />
           <SettingRow icon="trash-outline" title="Limpar Histórico" subtitle="Remove todas as apostas registradas" onPress={handleClearAll} danger />
         </View>
 
         {/* Sobre */}
         <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>SOBRE</Text>
-          <SettingRow icon="information-circle-outline" title="BetManager Pro" subtitle="v2.1.0 · Gestão inteligente de apostas" />
+          <SettingRow icon="information-circle-outline" title="BetManager Pro" subtitle="v3.0.0 · Gestão inteligente de apostas" />
           <SettingRow icon="shield-checkmark-outline" title="Dados locais" subtitle="Todas as informações ficam no seu dispositivo" />
         </View>
 
@@ -256,62 +186,19 @@ export default function SettingsScreen() {
       <Modal visible={footballModal} transparent animationType="slide">
         <View style={s.overlay}>
           <View style={[s.modal, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[s.modalTitle, { color: colors.text }]}>Chave Football-Data.org</Text>
-            <Text style={[s.modalSub, { color: colors.textSecondary }]}>Gratuita em football-data.org{'\n'}Cobre: PL, La Liga, Champions, Serie A, Bundesliga, Ligue 1</Text>
+            <Text style={[s.modalTitle, { color: colors.text }]}>Football-Data.org</Text>
+            <Text style={[s.modalSub, { color: colors.textSecondary }]}>
+              🆓 Gratuito em football-data.org{'\n'}
+              1. Acesse o site e clique em "Get free API token"{'\n'}
+              2. Crie sua conta e confirme o e-mail{'\n'}
+              3. Copie a chave e cole abaixo
+            </Text>
             <TextInput style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} placeholder="Cole sua API key aqui" placeholderTextColor={colors.textSecondary} value={footballInput} onChangeText={setFootballInput} autoCapitalize="none" autoCorrect={false} />
             <View style={s.modalBtns}>
               <TouchableOpacity style={[s.modalBtn, { borderColor: colors.border }]} onPress={() => setFootballModal(false)}>
                 <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[s.modalBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]} onPress={saveFootballKey}>
-                <Text style={{ color: '#fff', fontWeight: '700' }}>Salvar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Modal Smart API Key */}
-      <Modal visible={smartModal} transparent animationType="slide">
-        <View style={s.overlay}>
-          <View style={[s.modal, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[s.modalTitle, { color: colors.text }]}>RapidAPI — xG ao Vivo</Text>
-            <Text style={[s.modalSub, { color: colors.textSecondary }]}>
-              🆓 100 req/dia grátis{'\n'}
-              1. rapidapi.com → busque "Free API Live Football Data"{'\n'}
-              2. Subscribe → plano Free{'\n'}
-              3. Copie o "X-RapidAPI-Key" e cole abaixo
-            </Text>
-            <TextInput style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} placeholder="Cole sua chave RapidAPI aqui" placeholderTextColor={colors.textSecondary} value={smartInput} onChangeText={setSmartInput} autoCapitalize="none" autoCorrect={false} />
-            <View style={s.modalBtns}>
-              <TouchableOpacity style={[s.modalBtn, { borderColor: colors.border }]} onPress={() => setSmartModal(false)}>
-                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.modalBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]} onPress={saveSmartKey}>
-                <Text style={{ color: '#fff', fontWeight: '700' }}>Salvar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Modal Groq Key */}
-      <Modal visible={anthropicModal} transparent animationType="slide">
-        <View style={s.overlay}>
-          <View style={[s.modal, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[s.modalTitle, { color: colors.text }]}>Groq AI — Llama 3</Text>
-            <Text style={[s.modalSub, { color: colors.textSecondary }]}>
-              🆓 100% gratuito — sem cartão de crédito{'\n'}
-              1. Acesse console.groq.com{'\n'}
-              2. Clique em "API Keys" → "Create API Key"{'\n'}
-              3. Cole a chave abaixo (começa com gsk_...)
-            </Text>
-            <TextInput style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} placeholder="gsk_..." placeholderTextColor={colors.textSecondary} value={anthropicInput} onChangeText={setAnthropicInput} autoCapitalize="none" autoCorrect={false} />
-            <View style={s.modalBtns}>
-              <TouchableOpacity style={[s.modalBtn, { borderColor: colors.border }]} onPress={() => setAnthropicModal(false)}>
-                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.modalBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]} onPress={saveAnthropicKey}>
                 <Text style={{ color: '#fff', fontWeight: '700' }}>Salvar</Text>
               </TouchableOpacity>
             </View>

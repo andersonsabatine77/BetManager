@@ -10,13 +10,8 @@ import { useFonts } from 'expo-font';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 
 class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { error: null };
-  }
-  static getDerivedStateFromError(error) {
-    return { error };
-  }
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
   render() {
     if (this.state.error) {
       return (
@@ -32,11 +27,11 @@ class ErrorBoundary extends React.Component {
 }
 
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
-import { AppProvider, useApp } from './src/context/AppContext';
+import { AppProvider } from './src/context/AppContext';
 
 import HomeScreen from './src/screens/HomeScreen';
-import SuggestionsScreen from './src/screens/SuggestionsScreen';
-import LiveScreen from './src/screens/LiveScreen';
+import TodayMatchesScreen from './src/screens/TodayMatchesScreen';
+import NewBetScreen from './src/screens/NewBetScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import PerformanceScreen from './src/screens/PerformanceScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -44,18 +39,16 @@ import SettingsScreen from './src/screens/SettingsScreen';
 const Tab = createBottomTabNavigator();
 
 const TABS = [
-  { name: 'Home',       component: HomeScreen,        active: 'home',      inactive: 'home-outline',      label: 'Home' },
-  { name: 'Sugestões',  component: SuggestionsScreen, active: 'bulb',      inactive: 'bulb-outline',      label: 'Sugestões' },
-  { name: 'Ao Vivo',    component: LiveScreen,        active: 'radio',     inactive: 'radio-outline',     label: 'Ao Vivo' },
-  { name: 'Histórico',  component: HistoryScreen,     active: 'time',      inactive: 'time-outline',      label: 'Histórico' },
-  { name: 'Desempenho', component: PerformanceScreen, active: 'bar-chart', inactive: 'bar-chart-outline', label: 'Stats' },
-  { name: 'Config',     component: SettingsScreen,    active: 'settings',  inactive: 'settings-outline',  label: 'Config' },
+  { name: 'Home',       component: HomeScreen,          active: 'home',           inactive: 'home-outline',          label: 'Home' },
+  { name: 'Jogos',      component: TodayMatchesScreen,  active: 'calendar',       inactive: 'calendar-outline',      label: 'Jogos' },
+  { name: 'Aposta',     component: NewBetScreen,        active: 'add-circle',     inactive: 'add-circle-outline',    label: 'Aposta' },
+  { name: 'Histórico',  component: HistoryScreen,       active: 'time',           inactive: 'time-outline',          label: 'Histórico' },
+  { name: 'Stats',      component: PerformanceScreen,   active: 'bar-chart',      inactive: 'bar-chart-outline',     label: 'Stats' },
+  { name: 'Config',     component: SettingsScreen,      active: 'settings',       inactive: 'settings-outline',      label: 'Config' },
 ];
 
 function AppNavigator() {
   const { colors, isDark } = useTheme();
-  const { sugestoes } = useApp();
-  const sugCount = sugestoes ? sugestoes.length : 0;
   const insets = useSafeAreaInsets();
   const TAB_HEIGHT = 58;
 
@@ -85,17 +78,7 @@ function AppNavigator() {
             tabBarLabelStyle: { fontSize: 9, fontWeight: '600', marginTop: 1 },
             tabBarLabel: tabDef.label || route.name,
             tabBarIcon: ({ color, size, focused }) => (
-              <View>
-                <Ionicons name={focused ? tabDef.active : tabDef.inactive} size={size} color={color} />
-                {route.name === 'Sugestões' && sugCount > 0 && (
-                  <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-                    <Text style={styles.badgeText}>{sugCount > 99 ? '99+' : sugCount}</Text>
-                  </View>
-                )}
-                {route.name === 'Ao Vivo' && (
-                  <View style={[styles.liveDot, { backgroundColor: '#ef4444' }]} />
-                )}
-              </View>
+              <Ionicons name={focused ? tabDef.active : tabDef.inactive} size={size} color={color} />
             ),
           };
         }}
@@ -127,8 +110,4 @@ export default function App() {
   );
 }
 
-const styles = StyleSheet.create({
-  badge: { position: 'absolute', top: -4, right: -8, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
-  liveDot: { position: 'absolute', top: -2, right: -4, width: 6, height: 6, borderRadius: 3 },
-});
+const styles = StyleSheet.create({});
