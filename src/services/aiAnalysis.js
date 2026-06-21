@@ -40,7 +40,7 @@ export async function analyzeMatchesBatch(matches, onResult) {
     `ID:${m.id}|${m.liga}|${m.time1} vs ${m.time2}`
   ).join('\n');
 
-  const prompt = `Analise estes jogos de futebol e sugira as 3 melhores apostas para cada um. Escolha livremente entre: Over/Under gols (1.5, 2.5, 3.5), BTTS (ambos marcam), escanteios (8.5, 9.5, 10.5), cartões (3.5, 4.5), resultado (1X2, dupla chance). Priorize entradas com maior probabilidade real — seja honesto na confiança.
+  const prompt = `Analise estes jogos de futebol. Para cada jogo, liste APENAS as apostas onde você tem confiança MÍNIMA de 60%. Escolha entre: Over/Under gols (1.5, 2.5, 3.5), BTTS, escanteios (8.5, 9.5, 10.5), cartões (3.5, 4.5), resultado (1X2, dupla chance). Se não tiver 60% de confiança em nada, coloque as mais prováveis com confiança real. Nunca invente confiança alta — seja preciso.
 
 ${lista}
 
