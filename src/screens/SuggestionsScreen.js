@@ -163,20 +163,22 @@ export default function SuggestionsScreen() {
     const accumulated = {};
     analysisRunning.current = true;
 
-    await analyzeMatchesBatch(toAnalyze, (id, result) => {
-      accumulated[id] = { data: result.data, loading: false, error: result.error };
-      setAiResults(prev => ({ ...prev, [id]: accumulated[id] }));
-    });
+    try {
+      await analyzeMatchesBatch(toAnalyze, (id, result) => {
+        accumulated[id] = { data: result.data, loading: false, error: result.error };
+        setAiResults(prev => ({ ...prev, [id]: accumulated[id] }));
+      });
 
-    analysisRunning.current = false;
-
-    // Salva cache apenas se não houve erro global
-    const hasError = Object.values(accumulated).some(r => r.error?.includes('Cota') || r.error?.includes('QUOTA'));
-    if (!hasError) {
-      try {
-        const cacheKey = getCacheKey(toAnalyze);
-        await AsyncStorage.setItem(cacheKey, JSON.stringify(accumulated));
-      } catch (_) {}
+      // Salva cache apenas se não houve erro global
+      const hasError = Object.values(accumulated).some(r => r.error?.includes('Cota') || r.error?.includes('QUOTA'));
+      if (!hasError && Object.keys(accumulated).length > 0) {
+        try {
+          const cacheKey = getCacheKey(toAnalyze);
+          await AsyncStorage.setItem(cacheKey, JSON.stringify(accumulated));
+        } catch (_) {}
+      }
+    } finally {
+      analysisRunning.current = false;
     }
   }
 

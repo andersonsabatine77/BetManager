@@ -64,7 +64,12 @@ function MatchCard({ match, stats, colors, onBet }) {
   const minute = getMatchMinute(match);
   const sugs = generateLiveSuggestions(match, stats);
   const isLive = match.status === 'IN_PLAY' || match.status === 'HALFTIME';
-  const statusLabel = match.status === 'HALFTIME' ? 'Intervalo' : match.status === 'IN_PLAY' ? `${minute}'` : 'Em breve';
+  const FINISHED_STATUSES = ['FINISHED','POSTPONED','CANCELLED','SUSPENDED','AWARDED','WALKOVER'];
+  const statusLabel = match.status === 'HALFTIME' ? 'Intervalo'
+    : match.status === 'IN_PLAY' ? `${minute}'`
+    : match.status === 'TIMED' || match.status === 'SCHEDULED' ? 'Em breve'
+    : FINISHED_STATUSES.includes(match.status) ? 'Encerrado'
+    : match.status || 'Em breve';
   const hasStats = stats && (stats.home.xg !== null || stats.home.shots !== null);
 
   return (
@@ -165,7 +170,8 @@ export default function LiveScreen() {
     try {
       const [live, today] = await Promise.all([fetchLiveMatches(k), fetchTodayMatches(k)]);
       setLiveMatches(live);
-      setTodayMatches(today.filter(m => m.status !== 'IN_PLAY' && m.status !== 'HALFTIME'));
+      const DONE = ['FINISHED', 'POSTPONED', 'CANCELLED', 'SUSPENDED', 'AWARDED', 'WALKOVER'];
+      setTodayMatches(today.filter(m => !['IN_PLAY','HALFTIME',...DONE].includes(m.status)));
       setLastUpdate(new Date());
       // Busca estatísticas reais (xG, posse, chutes) para jogos ao vivo
       if (live.length > 0) {
