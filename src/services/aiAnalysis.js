@@ -53,18 +53,24 @@ Respond with ONLY a JSON object, no other text:
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content || '';
 
-    // Extrai o primeiro objeto JSON válido que contenha "analises"
-    const start = text.indexOf('{"analises"');
-    if (start === -1) throw new Error('PARSE_ERROR');
-    let depth = 0, end = -1;
-    for (let i = start; i < text.length; i++) {
-      if (text[i] === '{') depth++;
-      else if (text[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+    // Extrai qualquer JSON válido da resposta
+    function extractJSON(str) {
+      const start = str.indexOf('{');
+      if (start === -1) return null;
+      let depth = 0, end = -1;
+      for (let i = start; i < str.length; i++) {
+        if (str[i] === '{') depth++;
+        else if (str[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+      }
+      if (end === -1) return null;
+      try { return JSON.parse(str.slice(start, end + 1)); } catch { return null; }
     }
-    if (end === -1) throw new Error('PARSE_ERROR');
 
-    const parsed = JSON.parse(text.slice(start, end + 1));
-    const analises = parsed.analises || [];
+    const parsed = extractJSON(text);
+    if (!parsed) throw new Error('PARSE_ERROR: ' + text.slice(0, 80));
+
+    // Suporta tanto "analises" (pt) quanto "analyses" (en) e arrays diretos
+    const analises = parsed.analises || parsed.analyses || parsed.jogos || [];
 
     limited.forEach(m => {
       const found = analises.find(a => String(a.id) === String(m.id));
