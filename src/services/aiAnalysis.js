@@ -16,7 +16,7 @@ async function callGroq(apiKey, prompt) {
       model: GROQ_MODEL,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.4,
-      max_tokens: 3000,
+      max_tokens: 1500,
     }),
   });
   if (res.status === 401) throw new Error('INVALID_AI_KEY');
@@ -35,18 +35,17 @@ export async function analyzeMatchesBatch(matches, onResult) {
     return;
   }
 
-  const limited = matches.slice(0, 8);
-  const lista = limited.map((m, i) =>
-    `${i + 1}. ID:${m.id} | ${m.liga} | Mandante: ${m.time1} | Visitante: ${m.time2}`
+  const limited = matches.slice(0, 4);
+  const lista = limited.map(m =>
+    `ID:${m.id}|${m.liga}|${m.time1} vs ${m.time2}`
   ).join('\n');
 
-  const prompt = `Você é especialista em apostas esportivas. Analise os jogos e para CADA UM sugira as 3 melhores entradas: gols (Over/Under 0.5/1.5/2.5/3.5), BTTS, escanteios (8.5/9.5/10.5), cartões (3.5/4.5), resultado (1X2, dupla chance).
+  const prompt = `Analise estes jogos de futebol e retorne JSON com 3 sugestões de aposta para cada um.
 
-JOGOS:
 ${lista}
 
-Responda SOMENTE com JSON válido (sem texto antes ou depois):
-{"analises":[{"id":"ID_DO_JOGO","sugestoes":[{"tipo":"Mais de 2.5 Gols","confianca":75,"razao":"motivo curto"},{"tipo":"Ambos Marcam - Sim","confianca":70,"razao":"motivo curto"},{"tipo":"Vitória Mandante","confianca":65,"razao":"motivo curto"}]}]}`;
+JSON (sem texto fora):
+{"analises":[{"id":"ID","sugestoes":[{"tipo":"Mais de 2.5 Gols","confianca":72,"razao":"razão"},{"tipo":"Ambos Marcam - Sim","confianca":68,"razao":"razão"},{"tipo":"Dupla Chance 1X","confianca":65,"razao":"razão"}]}]}`;
 
   try {
     const res = await callGroq(apiKey, prompt);
