@@ -18,7 +18,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const stats = calcStats(apostas);
-  const chartData = buildChartData(apostas, period);
+  const chartData = buildChartData(apostas, period, banca.saldoInicial);
   const recentes = apostas.slice(0, 5);
   const lucroHoje = apostas
     .filter(a => new Date(a.data).toDateString() === new Date().toDateString() && a.resultado !== 'pending')

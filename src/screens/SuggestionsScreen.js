@@ -131,7 +131,7 @@ export default function SuggestionsScreen() {
   function getCacheKey(matches) {
     const today = new Date().toISOString().slice(0, 10);
     const ids = matches.map(m => m.id).join(',');
-    return `@ai_cache_v2_${today}_${ids.slice(0, 40)}`;
+    return `@ai_cache_v3_${today}_${ids.slice(0, 60)}`;
   }
 
   async function runAiAnalysis(matches, forceRefresh = false) {

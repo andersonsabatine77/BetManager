@@ -36,29 +36,44 @@ export function calcStatsByTipo(apostas) {
   return tipos.map(tipo => ({ tipo, ...calcStats(apostas.filter(a => a.tipo === tipo)) })).sort((a, b) => b.lucroLiquido - a.lucroLiquido);
 }
 
-export function buildChartData(apostas, period) {
+export function buildChartData(apostas, period, saldoInicial = 0) {
   const now = new Date();
   const sorted = [...apostas].filter(a => a.resultado !== 'pending').sort((a, b) => new Date(a.data) - new Date(b.data));
-  if (period === 'hoje') {
-    return Array.from({ length: 24 }, (_, h) => ({
-      label: `${h}h`,
-      value: sorted.filter(a => { const d = new Date(a.data); return d.toDateString() === now.toDateString() && d.getHours() <= h; }).reduce((s, a) => s + (Number(a.lucro) || 0), 0),
-    }));
+
+  // Retorna saldo acumulado: saldoInicial + soma cumulativa dos lucros até aquele ponto
+  function cumulativeAt(cutDate) {
+    return saldoInicial + sorted
+      .filter(a => new Date(a.data) <= cutDate)
+      .reduce((s, a) => s + (Number(a.lucro) || 0), 0);
   }
+
+  if (period === 'hoje') {
+    return Array.from({ length: 24 }, (_, h) => {
+      const cut = new Date(now); cut.setHours(h, 59, 59, 999);
+      if (h > now.getHours()) return { label: `${h}h`, value: cumulativeAt(new Date(now.setHours(now.getHours(), 59, 59, 999))) };
+      const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+      const val = saldoInicial + sorted
+        .filter(a => { const d = new Date(a.data); return d >= dayStart && d.getHours() <= h; })
+        .reduce((s, a) => s + (Number(a.lucro) || 0), 0);
+      return { label: `${h}h`, value: val };
+    });
+  }
+
   const days = period === '7dias' ? 7 : period === '30dias' ? 30 : null;
   if (days !== null) {
     return Array.from({ length: days }, (_, i) => {
       const d = new Date(now); d.setDate(d.getDate() - (days - 1 - i));
-      return { label: `${d.getDate()}/${d.getMonth() + 1}`, value: sorted.filter(a => new Date(a.data).toDateString() === d.toDateString()).reduce((s, a) => s + (Number(a.lucro) || 0), 0) };
+      const cut = new Date(d); cut.setHours(23, 59, 59, 999);
+      return { label: `${d.getDate()}/${d.getMonth() + 1}`, value: cumulativeAt(cut) };
     });
   }
-  if (!sorted.length) return [{ label: 'Início', value: 0 }];
+
+  if (!sorted.length) return [{ label: 'Início', value: saldoInicial }];
   const first = new Date(sorted[0].data);
   const weeks = Math.max(1, Math.ceil((now - first) / (7 * 86400000)));
   return Array.from({ length: Math.min(weeks, 16) }, (_, i) => {
-    const s = new Date(first); s.setDate(s.getDate() + i * 7);
-    const e = new Date(s); e.setDate(e.getDate() + 7);
-    return { label: `S${i + 1}`, value: sorted.filter(a => { const d = new Date(a.data); return d >= s && d < e; }).reduce((s2, a) => s2 + (Number(a.lucro) || 0), 0) };
+    const e = new Date(first); e.setDate(e.getDate() + (i + 1) * 7); e.setHours(23, 59, 59, 999);
+    return { label: `S${i + 1}`, value: cumulativeAt(e) };
   });
 }
 
