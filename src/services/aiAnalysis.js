@@ -16,7 +16,7 @@ async function callGroq(apiKey, prompt) {
       model: GROQ_MODEL,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.4,
-      max_tokens: 1500,
+      max_tokens: 2500,
     }),
   });
   if (res.status === 401) throw new Error('INVALID_AI_KEY');
@@ -35,12 +35,12 @@ export async function analyzeMatchesBatch(matches, onResult) {
     return;
   }
 
-  const limited = matches.slice(0, 4);
+  const limited = matches.slice(0, 8);
   const lista = limited.map(m =>
     `ID:${m.id}|${m.liga}|${m.time1} vs ${m.time2}`
   ).join('\n');
 
-  const prompt = `You are a sports betting analyst. For each football match below, suggest up to 3 bets with real confidence above 60%. Options: Over/Under goals (1.5,2.5,3.5), BTTS, corners (8.5,9.5,10.5), cards (3.5,4.5), match result (home win, draw, away win, double chance). Be honest about confidence.
+  const prompt = `You are a sports betting analyst. For each football match below, suggest up to 2 bets with real confidence above 60%. Options: Over/Under goals (1.5,2.5,3.5), BTTS, match result (home win, draw, away win, double chance). Be honest about confidence. Skip matches where you are not confident.
 
 Matches:
 ${lista}

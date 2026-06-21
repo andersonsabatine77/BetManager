@@ -399,8 +399,8 @@ export default function SuggestionsScreen() {
 
       {/* Manual modal */}
       <Modal visible={showManual} transparent animationType="slide" onRequestClose={() => setShowManual(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.overlay}>
-          <ScrollView style={[s.modal, { backgroundColor: colors.card }]}>
+        <KeyboardAvoidingView behavior="padding" style={s.overlay}>
+          <ScrollView style={[s.modal, { backgroundColor: colors.card }]} keyboardShouldPersistTaps="handled">
             <View style={s.modalHeader}>
               <Text style={[s.modalTitle, { color: colors.text }]}>Aposta Manual</Text>
               <TouchableOpacity onPress={() => setShowManual(false)}>

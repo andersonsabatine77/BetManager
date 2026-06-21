@@ -1,7 +1,10 @@
-import React from 'react';
-import { View } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text } from 'react-native';
+import { formatBRL } from '../utils/formatters';
 
-export default function MiniChart({ data, color = '#7c3aed', height = 80, showArea = true }) {
+export default function MiniChart({ data, color = '#7c3aed', height = 100 }) {
+  const [width, setWidth] = useState(0);
+
   if (!data || data.length < 2) return <View style={{ height }} />;
 
   const values = data.map(d => d.value);
@@ -9,13 +12,17 @@ export default function MiniChart({ data, color = '#7c3aed', height = 80, showAr
   const max = Math.max(...values);
   const range = (max - min) || 1;
 
-  const W = 300;
+  const padLeft = 4;
+  const padRight = 4;
+  const padTop = 6;
+  const padBottom = 0;
+
+  const W = width > 0 ? width : 300;
   const H = height;
-  const pad = 4;
 
   const pts = values.map((v, i) => ({
-    x: pad + (i / (values.length - 1)) * (W - pad * 2),
-    y: pad + (1 - (v - min) / range) * (H - pad * 2),
+    x: padLeft + (i / (values.length - 1)) * (W - padLeft - padRight),
+    y: padTop + (1 - (v - min) / range) * (H - padTop - padBottom),
   }));
 
   const segments = pts.slice(1).map((pt, i) => {
@@ -24,47 +31,71 @@ export default function MiniChart({ data, color = '#7c3aed', height = 80, showAr
     const dy = pt.y - prev.y;
     const len = Math.sqrt(dx * dx + dy * dy);
     const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-    const cx = (prev.x + pt.x) / 2;
-    const cy = (prev.y + pt.y) / 2;
-    return { cx, cy, len, angle };
+    return { cx: (prev.x + pt.x) / 2, cy: (prev.y + pt.y) / 2, len, angle };
   });
 
+  // X-axis labels: first and last date
+  const labels = data.map(d => d.label || '');
+  const firstLabel = labels[0];
+  const lastLabel = labels[labels.length - 1];
+  const midLabel = labels[Math.floor(labels.length / 2)];
+
   return (
-    <View style={{ height: H, width: '100%', position: 'relative' }}>
-      {segments.map((seg, i) => (
-        <View
-          key={i}
-          style={{
-            position: 'absolute',
-            left: `${(seg.cx / W) * 100}%`,
-            top: seg.cy - 1.5,
-            width: (seg.len / W) * 100 + '%',
-            height: 3,
-            backgroundColor: color,
-            borderRadius: 2,
-            transform: [
-              { translateX: -(seg.len / 2) },
-              { rotate: `${seg.angle}deg` },
-              { translateX: seg.len / 2 },
-            ],
-          }}
-        />
-      ))}
-      {pts.map((pt, i) => (
-        <View
-          key={`d${i}`}
-          style={{
-            position: 'absolute',
-            left: `${(pt.x / W) * 100}%`,
-            top: pt.y - 4,
-            width: 8,
-            height: 8,
-            borderRadius: 4,
-            backgroundColor: color,
-            marginLeft: -4,
-          }}
-        />
-      ))}
+    <View>
+      {/* Y-axis reference values */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+        <Text style={{ fontSize: 10, color: color, opacity: 0.7 }}>{formatBRL(max)}</Text>
+        <Text style={{ fontSize: 10, color: '#999', opacity: 0.7 }}>{formatBRL(min)}</Text>
+      </View>
+
+      {/* Chart area */}
+      <View
+        style={{ height: H, width: '100%', overflow: 'hidden' }}
+        onLayout={e => setWidth(e.nativeEvent.layout.width)}
+      >
+        {width > 0 && (
+          <>
+            {segments.map((seg, i) => (
+              <View
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: seg.cx - seg.len / 2,
+                  top: seg.cy - 1.5,
+                  width: seg.len,
+                  height: 3,
+                  backgroundColor: color,
+                  borderRadius: 2,
+                  transform: [{ rotate: `${seg.angle}deg` }],
+                }}
+              />
+            ))}
+            {pts.map((pt, i) => (
+              <View
+                key={`d${i}`}
+                style={{
+                  position: 'absolute',
+                  left: pt.x - 4,
+                  top: pt.y - 4,
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: color,
+                }}
+              />
+            ))}
+          </>
+        )}
+      </View>
+
+      {/* X-axis labels */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+        <Text style={{ fontSize: 9, color: '#999' }}>{firstLabel}</Text>
+        {midLabel && midLabel !== firstLabel && midLabel !== lastLabel && (
+          <Text style={{ fontSize: 9, color: '#999' }}>{midLabel}</Text>
+        )}
+        <Text style={{ fontSize: 9, color: '#999' }}>{lastLabel}</Text>
+      </View>
     </View>
   );
 }
