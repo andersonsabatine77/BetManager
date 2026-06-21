@@ -8,6 +8,7 @@ import { useApp } from '../context/AppContext';
 import { formatBRL } from '../utils/formatters';
 
 const FOOTBALL_KEY_STORAGE = '@betmanager_football_api_key';
+const RAPIDAPI_KEY_STORAGE  = '@betmanager_rapidapi_key';
 
 export default function SettingsScreen() {
   const { colors, isDark, toggle } = useTheme();
@@ -20,8 +21,13 @@ export default function SettingsScreen() {
   const [footballModal, setFootballModal] = useState(false);
   const [footballInput, setFootballInput] = useState('');
 
+  const [rapidKey, setRapidKey] = useState('');
+  const [rapidModal, setRapidModal] = useState(false);
+  const [rapidInput, setRapidInput] = useState('');
+
   useEffect(() => {
     AsyncStorage.getItem(FOOTBALL_KEY_STORAGE).then(k => { if (k) setFootballKey(k); });
+    AsyncStorage.getItem(RAPIDAPI_KEY_STORAGE).then(k => { if (k) setRapidKey(k); });
   }, []);
 
   async function saveFootballKey() {
@@ -36,6 +42,20 @@ export default function SettingsScreen() {
   async function removeFootballKey() {
     await AsyncStorage.removeItem(FOOTBALL_KEY_STORAGE);
     setFootballKey('');
+  }
+
+  async function saveRapidKey() {
+    const k = rapidInput.trim();
+    if (!k) return;
+    await AsyncStorage.setItem(RAPIDAPI_KEY_STORAGE, k);
+    setRapidKey(k);
+    setRapidModal(false);
+    setRapidInput('');
+  }
+
+  async function removeRapidKey() {
+    await AsyncStorage.removeItem(RAPIDAPI_KEY_STORAGE);
+    setRapidKey('');
   }
 
   function handleResetBanca() {
@@ -122,20 +142,37 @@ export default function SettingsScreen() {
         {/* API Jogos */}
         <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>INTEGRAÇÃO</Text>
+
+          {/* RapidAPI — API-Football (prioridade: dados ao vivo) */}
+          <KeyRow
+            icon="flash-outline"
+            title="RapidAPI · API-Football"
+            subtitle="Placar ao vivo em tempo real (recomendado)"
+            keyValue={rapidKey}
+            onConfigure={() => { setRapidInput(rapidKey); setRapidModal(true); }}
+            onRemove={() => Alert.alert('Remover chave?', 'Dados ao vivo serão desativados.', [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Remover', style: 'destructive', onPress: removeRapidKey },
+            ])}
+          />
+
+          {/* Football-Data.org (fallback) */}
           <KeyRow
             icon="football-outline"
             title="Football-Data.org"
-            subtitle="Chave gratuita para ver jogos do dia"
+            subtitle={rapidKey ? 'Fallback (RapidAPI tem prioridade)' : 'Jogos agendados e resultados'}
             keyValue={footballKey}
             onConfigure={() => { setFootballInput(footballKey); setFootballModal(true); }}
-            onRemove={() => Alert.alert('Remover chave?', 'Os jogos do dia não serão carregados.', [
+            onRemove={() => Alert.alert('Remover chave?', 'Jogos do dia não serão carregados.', [
               { text: 'Cancelar', style: 'cancel' },
               { text: 'Remover', style: 'destructive', onPress: removeFootballKey },
             ])}
           />
+
           <View style={[s.apiInfo, { borderTopColor: colors.border }]}>
             <Text style={[s.apiInfoText, { color: colors.textSecondary }]}>
-              Chave gratuita em football-data.org → "Get free API token". Cobre Premier League, La Liga, Champions, Brasileirão e mais.
+              🔴 RapidAPI: rapidapi.com → buscar "API-Football" → plano Free (100 req/dia){'\n'}
+              ⚪ Football-Data.org: football-data.org → "Get free API token"
             </Text>
           </View>
         </View>
@@ -176,6 +213,31 @@ export default function SettingsScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={[s.modalBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]} onPress={handleResetBanca}>
                 <Text style={{ color: '#fff', fontWeight: '700' }}>Confirmar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal RapidAPI Key */}
+      <Modal visible={rapidModal} transparent animationType="slide">
+        <View style={s.overlay}>
+          <View style={[s.modal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[s.modalTitle, { color: colors.text }]}>RapidAPI · API-Football</Text>
+            <Text style={[s.modalSub, { color: colors.textSecondary }]}>
+              🔴 Dados ao vivo com placar em tempo real{'\n\n'}
+              1. Acesse rapidapi.com e busque "API-Football"{'\n'}
+              2. Clique em "Subscribe to Test" → plano Free{'\n'}
+              3. Copie sua chave em "Apps → Default App → Authorization"{'\n'}
+              4. Cole abaixo
+            </Text>
+            <TextInput style={[s.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} placeholder="Cole sua RapidAPI key aqui" placeholderTextColor={colors.textSecondary} value={rapidInput} onChangeText={setRapidInput} autoCapitalize="none" autoCorrect={false} />
+            <View style={s.modalBtns}>
+              <TouchableOpacity style={[s.modalBtn, { borderColor: colors.border }]} onPress={() => setRapidModal(false)}>
+                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.modalBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]} onPress={saveRapidKey}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Salvar</Text>
               </TouchableOpacity>
             </View>
           </View>
