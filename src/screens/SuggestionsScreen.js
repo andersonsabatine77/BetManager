@@ -53,7 +53,7 @@ function AiSuggestions({ aiData, loading, error, colors }) {
     );
   }
 
-  const filtered = (aiData || []).filter(s => (parseInt(s.confianca, 10) || 0) >= 60);
+  const filtered = (aiData || []).filter(s => (parseInt(s.confianca, 10) || 0) >= 55);
   if (filtered.length === 0) return null;
 
   return (

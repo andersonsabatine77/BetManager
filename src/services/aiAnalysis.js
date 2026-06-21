@@ -40,12 +40,12 @@ export async function analyzeMatchesBatch(matches, onResult) {
     `ID:${m.id}|${m.liga}|${m.time1} vs ${m.time2}`
   ).join('\n');
 
-  const prompt = `Analise estes jogos de futebol. Para cada jogo escolha 3 entradas DIFERENTES entre si — cada uma de uma categoria diferente: uma de GOLS (Over/Under 1.5, 2.5 ou 3.5), uma de ESCANTEIOS (Over/Under 8.5, 9.5 ou 10.5) OU CARTÕES (Over/Under 3.5 ou 4.5), e uma de RESULTADO (1X2, dupla chance, BTTS). Varie as categorias — nunca repita a mesma categoria nas 3 sugestões.
+  const prompt = `Analise estes jogos de futebol e sugira as 3 melhores apostas para cada um. Escolha livremente entre: Over/Under gols (1.5, 2.5, 3.5), BTTS (ambos marcam), escanteios (8.5, 9.5, 10.5), cartões (3.5, 4.5), resultado (1X2, dupla chance). Priorize entradas com maior probabilidade real — seja honesto na confiança.
 
 ${lista}
 
 JSON (sem texto fora):
-{"analises":[{"id":"ID","sugestoes":[{"tipo":"Mais de 2.5 Gols","confianca":72,"razao":"razão curta"},{"tipo":"Mais de 9.5 Escanteios","confianca":68,"razao":"razão curta"},{"tipo":"Vitória Mandante","confianca":65,"razao":"razão curta"}]}]}`;
+{"analises":[{"id":"ID","sugestoes":[{"tipo":"Mais de 2.5 Gols","confianca":72,"razao":"razão curta"},{"tipo":"Ambos Marcam - Sim","confianca":68,"razao":"razão curta"},{"tipo":"Dupla Chance 1X","confianca":65,"razao":"razão curta"}]}]}`;
 
   try {
     const res = await callGroq(apiKey, prompt);
