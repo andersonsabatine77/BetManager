@@ -53,15 +53,16 @@ function AiSuggestions({ aiData, loading, error, colors }) {
     );
   }
 
-  if (!aiData || aiData.length === 0) return null;
+  const filtered = (aiData || []).filter(s => s.confianca > 60);
+  if (filtered.length === 0) return null;
 
   return (
     <View style={[ai.container, { borderTopColor: colors.border }]}>
       <View style={ai.titleRow}>
         <Text style={{ fontSize: 14 }}>🤖</Text>
-        <Text style={[ai.title, { color: colors.primary }]}>Análise IA — Top 3 Entradas</Text>
+        <Text style={[ai.title, { color: colors.primary }]}>Análise IA — Acima de 60%</Text>
       </View>
-      {aiData.map((sug, i) => {
+      {filtered.map((sug, i) => {
         const confColor = sug.confianca >= 75 ? colors.success : sug.confianca >= 60 ? colors.warning : colors.danger;
         return (
           <View key={i} style={[ai.item, { backgroundColor: colors.background, borderColor: colors.border }]}>
